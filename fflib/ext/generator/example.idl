@@ -1,0 +1,12 @@
+
+struct get_friends_req_t
+{
+    uint32 uid;
+};
+
+
+struct all_friends_ret_t
+{
+    array<uint32> friends;
+};
+

@@ -1,0 +1,55 @@
+<html>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+<head>
+<style>
+.file-box{ position:relative;width:340px} 
+.txt{ height:22px; border:1px solid #cdcdcd; width:180px;} 
+.btn{ background-color:#FFF; border:1px solid #CDCDCD;height:24px; width:120px;} 
+.file{ position:absolute; top:0; right:80px; height:24px; filter:alpha(opacity:0);opacity: 0;width:260px } 
+</style>
+<script type="text/javascript" src="./js/jquery.js" ></script> 
+<title>test page</title>
+</head>
+
+<body leftmargin=10 rirgtmargin=10 topmargin=10>
+
+<h1> Hi, We can Write Web App Program!! So Nice !! </h1>
+<h3> image example [get search result from google by python, control by jquey]
+<input type="button" value="random load image from google" onClick=bton_onclik() />
+</h3>
+<div id ="out">
+<img src="./images/a.jpg" width=100 height=100/><br>
+</div>
+<h3>file system example, There you know, JS can access any local System Resource! Because We have PyQt!! </h3>
+<div class="file-box">
+ <input type='text' name='textfield' id='textfield' class='txt' />  
+ <input type="button" value="select file" onClick=select_file() class='btn' />
+</div>
+
+<h3> link example [right click, can go back]</h3>
+<a href="http://www.cnblogs.com/zhiranok"> redirct to my blog </a>
+<h3> HTML5 example </h3>
+<iframe src="./html5.html"
+                   width="500" height="300"
+                   scrolling="true"
+                   frameborder="0"
+                   align="left"></iframe>
+</body>
+</html>
+
+<script>
+function bton_onclik()
+{
+    var url = python.get_image_url();
+    $("#out").html('url:' + url + '<br><img src='+url+'  width=200 height=200/>');
+}
+
+function select_file()
+{
+	var path = python.select_file("*");
+	$("#textfield").val(path);
+	var content = python.readfile(path);
+        alert("JS can read file from local !!How Amazing!!\n"+content);
+}
+</script>
+

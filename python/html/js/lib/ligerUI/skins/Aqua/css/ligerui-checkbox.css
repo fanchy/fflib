@@ -1,0 +1,27 @@
+﻿ 
+/* -------------
+    * 复选框 *
+* ------------- */
+.l-checkbox-wrapper{
+	display: -moz-inline-stack;display:inline-block; zoom: 1;*display: inline;margin:0 auto;margin-right:2px; padding:0;}
+a.l-checkbox {
+	background:url('../images/controls/checkbox.gif') no-repeat 0 0;
+	vertical-align: middle;
+	height: 13px;
+	width: 13px; margin:0 auto;
+	overflow:hidden;
+	display: -moz-inline-stack;display:inline-block; zoom: 1;*display: inline;
+}
+a.l-checkbox-checked
+{
+    background-position:0 -13px;
+}
+.l-over a.l-checkbox
+{
+    background-position:-13px 0px;
+}
+.l-over a.l-checkbox-checked
+{
+    background-position:-13px -13px;
+}
+ 

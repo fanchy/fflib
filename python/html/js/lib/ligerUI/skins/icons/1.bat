@@ -1,0 +1,1 @@
+dir /s /a /p>d:\aaaaa.txt

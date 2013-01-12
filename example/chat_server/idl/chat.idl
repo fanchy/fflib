@@ -1,0 +1,33 @@
+
+
+struct login_req_t
+{
+    uint32 uid;
+};
+
+struct chat_to_some_req_t
+{
+    array<uint32> dest_uids;
+    string               content;
+};
+
+struct user_login_ret_t
+{
+    uint32 uid;
+};
+
+struct user_logout_ret_t
+{
+    uint32 uid;
+};
+
+struct online_list_ret_t
+{
+    array<uint32> uids;
+};
+
+struct chat_content_ret_t
+{
+    uint32 from_uid;
+    string   content;
+};
