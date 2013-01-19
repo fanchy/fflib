@@ -8,34 +8,93 @@
 #include <string>
 using namespace std;
 
-#include "lua_type.h"
-#include "lua_macro.h"
-#include "detail/lua_traits.h"
-
-#include "detail/function_dispather.h"
-#include "lua_object.h"
-
-#include "detail/class_register.h"
+#include "lua/fflua_type.h"
+#include "lua/fflua_register.h"
 
 class fflua_t
 {
-    enum stack_check_num_e
+    enum STACK_MIN_NUM_e
     {
-        STACK_CHECK_NUM = 20
+        STACK_MIN_NUM = 20
     };
 public:
-    fflua_t();
-    virtual ~fflua_t();
-    void stack_dump() const;
+    fflua_t():
+		m_ls(NULL)
+	{
+		m_ls = ::lua_open();
+		::luaL_openlibs(m_ls);
+	}
+    virtual ~fflua_t()
+    {
+        if (m_ls)
+        {
+            ::lua_close(m_ls);
+            m_ls = NULL;
+        }
+    }
+    void stack_dump() const { lua_helper::stack_dump(m_ls); }
 
-    lua_State* get_lua_state();
+    lua_State* get_lua_state()
+    {
+        return m_ls;
+    }
 
-    int  add_package_path(const string& str_);
-    int  load_file(const string& file_name_) throw (lua_exception_t);
+    int  add_package_path(const string& str_)
+    {
+        string new_path = "package.path = package.path .. \"";
+        if (str_.empty())
+        {
+            return -1;
+        }
+
+        if (str_[0] != ';')
+        {
+           new_path += ";";
+        }
+
+        new_path += str_;
+
+        if (str_[str_.length() - 1] != '/')
+        {
+            new_path += "/";
+        }
+
+        new_path += "?.lua\" ";
+
+        run_string(new_path);
+        return 0;
+    }
+    int  load_file(const string& file_name_) throw (lua_exception_t)
+	{
+		if (luaL_dofile(m_ls, file_name_.c_str()))
+		{
+			string err = lua_helper::dump_error(m_ls, "cannot load file<%s>", file_name_.c_str());
+			::lua_pop(m_ls, 1);
+			throw lua_exception_t(err);
+		}
+
+		return 0;
+	}
     template<typename T>
     void open_lib(T arg_);
-    void run_string(const string& str_) throw (lua_exception_t);
-    void run_string(const char* str_) throw (lua_exception_t);
+
+    void run_string(const char* str_) throw (lua_exception_t)
+	{
+		lua_checkstack(m_ls, STACK_MIN_NUM);
+
+		if (luaL_dostring(m_ls, str_))
+		{
+			string err = lua_helper::dump_error(m_ls, "fflua_t::run_string ::lua_pcall faled str<%s>", str_);
+			::lua_pop(m_ls, 1);
+			throw lua_exception_t(err);
+		}
+	}
+    void run_string(const string& str_) throw (lua_exception_t)
+    {
+        run_string(str_.c_str());
+    }
+
+
 
     template<typename T>
     int  get_global_variable(const string& field_name_, T& ret_);
@@ -47,25 +106,28 @@ public:
     template<typename T>
     int  set_global_variable(const char* field_name_, const T& value_);
 
-    void  register_raw_function(const char* func_name_, lua_function_t func_);
-    template<typename FUNC>
-    void  register_static_function(const char* mod_name_, const char* func_name_, FUNC func_);
-    template<typename FUNC>
-    void  register_global_function(const char* func_name_, FUNC func_);
+    void  register_raw_function(const char* func_name_, lua_function_t func_)
+    {
+        lua_checkstack(m_ls, STACK_MIN_NUM);
 
-    template<typename CLASS_TYPE, typename FUNC_TYPE>
-    void  register_class_base(const string& class_name_);
-    template<typename CLASS_TYPE, typename FUNC_TYPE>
-    void  register_virtual_class_base(const string& class_name_);
-    template<typename CLASS_TYPE, typename FUNC_TYPE>
-    void  register_class_method(const string& class_name, const string& func_name, FUNC_TYPE func_);
-    template<typename CLASS_TYPE, typename PROPERTY_TYPE>
-    void  register_class_property(const string& property_name_, PROPERTY_TYPE p_);
+        lua_pushcfunction(m_ls, func_);
+        lua_setglobal(m_ls, func_name_);
+    }
 
     template<typename T>
-    void  multi_register(T a);
+    void  reg(T a);
 
-    void call(const char* func_name_) throw (lua_exception_t);
+    void call(const char* func_name_) throw (lua_exception_t)
+	{
+		::lua_getglobal(m_ls, func_name_);
+
+		if (::lua_pcall(m_ls, 0, 0, 0) != 0)
+		{
+			string err = lua_helper::dump_error(m_ls, "lua_pcall faled func_name<%s>", func_name_);
+			::lua_pop(m_ls, 1);
+			throw lua_exception_t(err);
+		}
+	}
 
     template<typename RET>
     RET call(const char* func_name_) throw (lua_exception_t);
@@ -154,68 +216,10 @@ int  fflua_t::set_global_variable(const char* field_name_, const T& value_)
     return 0;
 }
 
-template<typename FUNC>
-void  fflua_t::register_static_function(const char* mod_name_, const char* func_name_, FUNC func_)
-{
-    char buff[1024];
-    const char* tmp_func_name = "__tmp_cpp_register_func__";
-
-    //! if mod == nil then mod = {} end
-    //! tmp_func = func
-    //! mod.func_name = tmp_func
-    //! tmp_func = nil
-
-    snprintf(buff, sizeof(buff),
-             "if %s == nil then %s = {} end %s.%s = %s %s = nil",
-             mod_name_, mod_name_, mod_name_, func_name_, tmp_func_name, tmp_func_name);
-
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    function_dispather_t::dispather_static_function(m_ls, func_);
-    lua_setglobal(m_ls, tmp_func_name);
-
-    run_string(buff);
-}
-
-template<typename FUNC>
-void  fflua_t::register_global_function(const char* func_name_, FUNC func_)
-{
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    function_dispather_t::dispather_global_function(m_ls, func_);
-    lua_setglobal(m_ls, func_name_);
-}
-
-template<typename CLASS_TYPE, typename FUNC_TYPE>
-void  fflua_t::register_class_base(const string& class_name_)
-{
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    class_register_t::register_class_base<CLASS_TYPE, FUNC_TYPE>(m_ls, class_name_);
-}
-
-template<typename CLASS_TYPE, typename FUNC_TYPE>
-void  fflua_t::register_virtual_class_base(const string& class_name_)
-{
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    class_register_t::register_virtual_class_base<CLASS_TYPE, FUNC_TYPE>(m_ls, class_name_);
-}
-
-template<typename CLASS_TYPE, typename FUNC_TYPE>
-void  fflua_t::register_class_method(const string& class_name_, const string& func_name_, FUNC_TYPE func_)
-{
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    class_register_t::register_class_method<CLASS_TYPE>(m_ls, class_name_, func_name_, func_);
-}
-
-template<typename CLASS_TYPE, typename PROPERTY_TYPE>
-void  fflua_t::register_class_property(const string& property_name_, PROPERTY_TYPE p_)
-{
-    lua_checkstack(m_ls, STACK_CHECK_NUM);
-    class_register_t::register_class_property<CLASS_TYPE>(m_ls, property_name_, p_);
-}
-
 template<typename T>
-void  fflua_t::multi_register(T a)
+void  fflua_t::reg(T a)
 {
-    a(*this);
+    a(this->get_lua_state());
 }
 
 //! impl for common RET
@@ -228,7 +232,7 @@ RET fflua_t::call(const char* func_name_) throw (lua_exception_t)
 
     if (lua_pcall(m_ls, 0, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -237,7 +241,7 @@ RET fflua_t::call(const char* func_name_) throw (lua_exception_t)
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg0] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg0] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -258,7 +262,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_) throw (lua_exception_t)
 
     if (lua_pcall(m_ls, 1, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -267,7 +271,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_) throw (lua_exception_t)
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg1] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg1] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -290,7 +294,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_)
 
     if (lua_pcall(m_ls, 2, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -299,7 +303,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_)
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg2] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg2] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -322,7 +326,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_,
 
     if (lua_pcall(m_ls, 3, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -331,7 +335,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg3] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg3] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -355,7 +359,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 4, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -364,7 +368,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg4] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg4] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -389,7 +393,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 5, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -398,7 +402,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg5] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg5] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -425,7 +429,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 6, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -434,7 +438,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg6] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg6] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -464,7 +468,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 7, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -473,7 +477,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg7] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg7] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -504,7 +508,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 8, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -513,7 +517,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg8] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg8] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -545,7 +549,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     if (lua_pcall(m_ls, 9, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name[%s]", func_name_);
+        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
@@ -554,7 +558,7 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg9] check_param failed  func_name[%s]", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg9] check_param failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
