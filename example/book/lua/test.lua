@@ -1,5 +1,9 @@
 
 function foo(a)
-    print("foooooo....:", foo_t:new())
+    foo = foo_t:new()
+    print("foooooo....:", foo, foo:get_pointer())
+    foo:print()
+    foo:delete()
+    dumy()
 end
 

@@ -12,22 +12,42 @@ using namespace ff;
 class foo_t
 {
 public:
-void print()
-{}
+	~foo_t()
+	{
+		printf("in %s\n", __FUNCTION__);
+	}
+	void print() const
+	{
+		printf("in foo_t::print\n");
+	}
+
+	static void dumy()
+	{
+		printf("in %s\n", __FUNCTION__);
+	}
+	int a;
 };
 
-LUA_REGISTER_BEGIN(ext)
-REGISTER_CLASS_BASE("foo_t", foo_t, void())
-REGISTER_CLASS_METHOD("foo_t", "print", foo_t, &foo_t::print)
-LUA_REGISTER_END
+void dumy()
+{
+	printf("in %s\n", __FUNCTION__);
+}
 
+void lua_reg(lua_State* ls)
+{
+	fflua_register_t<foo_t>(ls, "foo_t")
+				.def_class_func(&foo_t::print, "print")
+				.def_class_property(&foo_t::a, "a")
+				.def_func(&foo_t::dumy, "dumy");
+}
 int main(int argc, char* argv[])
 {
 
 	fflua_t fflua;
-	fflua.multi_register(ext);
 	fflua.load_file("test.lua");
+	fflua.reg(lua_reg);
 	fflua.call<bool>("foo", 1);
+
 
     return 0;
 }
