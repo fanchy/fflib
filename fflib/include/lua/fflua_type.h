@@ -65,14 +65,15 @@ public:
                 break;
                 case LUA_TTABLE:
                 {
+                	printf("table end\n");
                      lua_pushnil(ls_);
                      while (lua_next(ls_, i) != 0) {
-                       printf("%s - %s\n",
+                       printf("	%s - %s\n",
                               lua_typename(ls_, lua_type(ls_, -2)),
                               lua_typename(ls_, lua_type(ls_, -1)));
                        lua_pop(ls_, 1);
                      }
-                     printf("`%s'", "table");
+                     printf("table end");
                 }
                 break;
                 default:
