@@ -13,58 +13,53 @@ namespace ff
 {
 
 #define ctor void
-#define ARG_INDEX(x) (x)
-#define LUA_ARG_INDEX(x) (x)
+#define LUA_ARG_POS(x) (x)
+
 typedef int (*mt_index_func_t)(lua_State*, void*, const char*);
 typedef int (*mt_newindex_func_t)(lua_State*, void*, const char*, int);
 
-#define METATABLE_NAME(x) metatable_name((x)).c_str()
-static string metatable_name(const string& name_)
-{
-	string ret = "fflua." + name_;
-	return ret;
-}
+#define TO_METATABLE_NAME(x) op_tool_t::to_metatable_name((x)).c_str()
 
+struct op_tool_t
+{
+	static string to_metatable_name(const string& name_)
+	{
+		return string("fflua.") + name_;
+	}
+};
 
 template<typename T>
-struct property_registry_t
+struct class_property_info_t
 {
-    property_registry_t():field_ptr(NULL)
-    {
-    }
-    T field_ptr;
+    class_property_info_t():property_pos(NULL){}
+    T property_pos;
 };
 
 //! 记录类中字段的指针
-struct lua_property_impl_t
+struct real_class_property_processor_t
 {
-    lua_property_impl_t():
+    real_class_property_processor_t():
         index_impl_func(NULL),
         newindex_impl_func(NULL),
-        field_ptr(NULL)
+        property_pos(NULL)
     {}
-    //! index impl function and newindex impl function
     mt_index_func_t    index_impl_func;
     mt_newindex_func_t newindex_impl_func;
 
-    void* field_ptr;
+    void* property_pos;
 };
 
 template<typename FUNC_TYPE>
-struct register_data_t
+struct userdata_for_function_t
 {
-    register_data_t(FUNC_TYPE func_):
-        dest_func(func_)
-    {
-    }
-
-    FUNC_TYPE   dest_func;
+    userdata_for_function_t(FUNC_TYPE func_): real_func(func_){}
+    FUNC_TYPE   real_func;
 };
 template<typename PROPERTY_TYPE>
-struct lua_property_udata_t : public lua_property_impl_t
+struct userdata_for_class_property_t : public real_class_property_processor_t
 {
-    typedef property_registry_t<PROPERTY_TYPE> reg_property_t;
-    reg_property_t                             reg_property;
+    typedef class_property_info_t<PROPERTY_TYPE> real_class_property_info_t;
+    real_class_property_info_t                   property_info;
 };
 
 
@@ -74,20 +69,29 @@ struct metatable_register_impl_t
 {
 	static int mt_index_function(lua_State* ls_)
 	{
-		string key;
-		lua_traits_t<string>::check_lua_param(ls_, ARG_INDEX(2), key);
+		const char* key = luaL_checkstring(ls_, LUA_ARG_POS(2));
 
 		luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
 		int mt_index = lua_gettop(ls_);
 
-		lua_getfield(ls_, -1, key.c_str());
+		lua_getfield(ls_, -1, key);
 		lua_remove(ls_, mt_index);
+
+		//! 没有这个字段，查找基类
+		if (lua_isnil(ls_, -1) && lua_type_info_t<CLASS_TYPE>::is_inherit())
+		{
+			lua_pop(ls_, 1);
+			luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_inherit_name());
+			mt_index = lua_gettop(ls_);
+			lua_getfield(ls_, -1, key);
+			lua_remove(ls_, mt_index);
+		}
 
 		if (lua_isuserdata(ls_, -1))//! 获取属性
 		{
-			lua_property_impl_t* p = (lua_property_impl_t*)lua_touserdata(ls_, -1);
+			real_class_property_processor_t* p = (real_class_property_processor_t*)lua_touserdata(ls_, -1);
 			lua_pop(ls_, 1);
-			return (*(p->index_impl_func))(ls_, p->field_ptr, key.c_str());
+			return (*(p->index_impl_func))(ls_, p->property_pos, key);
 		}
 		else
 		{
@@ -96,20 +100,28 @@ struct metatable_register_impl_t
 	}
 	static int mt_newindex_function(lua_State* ls_)
 	{
-		string key;
-		lua_traits_t<string>::check_lua_param(ls_, ARG_INDEX(2), key);
+		const char* key = luaL_checkstring(ls_, LUA_ARG_POS(2));
 
 		luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
 		int mt_index = lua_gettop(ls_);
 
-		lua_getfield(ls_, -1, key.c_str());
+		lua_getfield(ls_, -1, key);
 		lua_remove(ls_, mt_index);
 
+		//! 没有这个字段，查找基类
+		if (lua_isnil(ls_, -1) && lua_type_info_t<CLASS_TYPE>::is_inherit())
+		{
+			lua_pop(ls_, 1);
+			luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_inherit_name());
+			mt_index = lua_gettop(ls_);
+			lua_getfield(ls_, -1, key);
+			lua_remove(ls_, mt_index);
+		}
 		if (lua_isuserdata(ls_, -1))
 		{
-			lua_property_impl_t* p = (lua_property_impl_t*)lua_touserdata(ls_, -1);
+			real_class_property_processor_t* p = (real_class_property_processor_t*)lua_touserdata(ls_, -1);
 			lua_pop(ls_, 1);
-			return (*(p->newindex_impl_func))(ls_, p->field_ptr, key.c_str(), ARG_INDEX(3));
+			return (*(p->newindex_impl_func))(ls_, p->property_pos, key, LUA_ARG_POS(3));
 		}
 		else
 		{
@@ -117,7 +129,7 @@ struct metatable_register_impl_t
 		}
 	}
 
-	static CLASS_TYPE** get_userdata_ref(lua_State* ls_)
+	static CLASS_TYPE** userdata_to_object_ptr_address(lua_State* ls_)
 	{
 	    if (false == lua_type_info_t<CLASS_TYPE>::is_registed())
 	    {
@@ -125,7 +137,6 @@ struct metatable_register_impl_t
 	    }
 
 	    void* arg_data = luaL_checkudata(ls_, 1, lua_type_info_t<CLASS_TYPE>::get_name());
-
 	    if (NULL == arg_data)
 	    {
 	        char buff[512];
@@ -134,30 +145,45 @@ struct metatable_register_impl_t
 	        luaL_argerror(ls_, 1, buff);
 	    }
 
-	    CLASS_TYPE** ret_ptr = &(((class_userdata_t<CLASS_TYPE>*)arg_data)->obj_ptr);
+	    CLASS_TYPE** ret_ptr = &(((userdata_for_object_t<CLASS_TYPE>*)arg_data)->obj);
 	    return ret_ptr;
 	}
-	static CLASS_TYPE* check_userdata_type(lua_State* ls_)
+	static CLASS_TYPE* userdata_to_object(lua_State* ls_)
 	{
 	    if (false == lua_type_info_t<CLASS_TYPE>::is_registed())
 	    {
 	        luaL_argerror(ls_, 1, "arg 1 can't convert to class*, because the class has not registed to Lua");
 	    }
+	    void *arg_data = lua_touserdata(ls_, 1);
+		if (NULL == arg_data)
+		{
+			luaL_argerror(ls_, 1, "arg 1 need userdsata(can't be null) param");
+		}
+		if (0 == lua_getmetatable(ls_, 1))
+		{
+			luaL_argerror(ls_, 1, "arg 1 has no metatable, it is not cpp type");
+		}
 
-	    void* arg_data = luaL_checkudata(ls_, 1, lua_type_info_t<CLASS_TYPE>::get_name());
-
-	    if (NULL == arg_data)
-	    {
-	        char buff[512];
-	        snprintf(buff, sizeof(buff), "`%s` expect arg 1, but arg == null",
-	        								lua_type_info_t<CLASS_TYPE>::get_name());
-	        luaL_argerror(ls_, 1, buff);
-	    }
-
-	    CLASS_TYPE* ret_ptr = ((class_userdata_t<CLASS_TYPE>*)arg_data)->obj_ptr;
+		luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
+		if (0 == lua_rawequal(ls_, -1, -2))
+		{
+			//! 查找基类
+			lua_getfield(ls_, -2, INHERIT_TABLE);
+			if (0 == lua_rawequal(ls_, -1, -2))
+			{
+				lua_pop(ls_, 3);
+				luaL_argerror(ls_, 1, "type convert failed");
+			}
+			lua_pop(ls_, 3);
+		}
+		else
+		{
+			lua_pop(ls_, 2);
+		}
+	    CLASS_TYPE* ret_ptr = ((userdata_for_object_t<CLASS_TYPE>*)arg_data)->obj;
 	    if (NULL == ret_ptr)
 	    {
-	        char buff[512];
+	        char buff[128];
 	        snprintf(buff, sizeof(buff), "`%s` object ptr can't be null",
 	        								lua_type_info_t<CLASS_TYPE>::get_name());
 	        luaL_argerror(ls_, 1, buff);
@@ -166,9 +192,9 @@ struct metatable_register_impl_t
 	}
 	static int get_pointer(lua_State* ls_)
 	{
-		CLASS_TYPE** obj_ptr = get_userdata_ref(ls_);
+		CLASS_TYPE** obj_ptr = userdata_to_object_ptr_address(ls_);
 		long  addr = long(*obj_ptr);
-		lua_traits_t<long>::push_stack(ls_, addr);
+		lua_op_t<long>::push_stack(ls_, addr);
 		return 1;
 	}
 };
@@ -180,12 +206,9 @@ struct new_traits_t;
 template <typename CLASS_TYPE>
 struct delete_traits_t
 {
-    typedef void(*dest_func_t)();
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
-
     static  int lua_function(lua_State* ls_)
     {
-        CLASS_TYPE** obj_ptr = metatable_register_impl_t<CLASS_TYPE>::get_userdata_ref(ls_);
+        CLASS_TYPE** obj_ptr = metatable_register_impl_t<CLASS_TYPE>::userdata_to_object_ptr_address(ls_);
 
         delete *obj_ptr;
         *obj_ptr = NULL;
@@ -216,7 +239,7 @@ template<typename CLASS_TYPE, typename CTOR_TYPE = void()>
 class fflua_register_t
 {
 public:
-	fflua_register_t(lua_State* ls_, const string& class_name_);
+	fflua_register_t(lua_State* ls_, const string& class_name_, string inherit_name_ = "");
 
 
 	template<typename FUNC_TYPE>
@@ -229,12 +252,12 @@ public:
 	fflua_register_t& def_class_func(FUNC_TYPE func_, const string& func_name_)
 	{
 		lua_function_t class_function = &class_function_traits_t<FUNC_TYPE>::lua_function;
-		typedef typename class_function_traits_t<FUNC_TYPE>::dest_register_data_t register_data_t;
-		void* user_data_ptr = lua_newuserdata(m_ls, sizeof(register_data_t));
-		new(user_data_ptr) register_data_t(func_);
+		typedef typename class_function_traits_t<FUNC_TYPE>::userdata_for_function_info userdata_for_function_t;
+		void* user_data_ptr = lua_newuserdata(m_ls, sizeof(userdata_for_function_t));
+		new(user_data_ptr) userdata_for_function_t(func_);
 		lua_pushcclosure(m_ls, class_function, 1);
 
-		luaL_getmetatable(m_ls, METATABLE_NAME(m_class_name));
+		luaL_getmetatable(m_ls, TO_METATABLE_NAME(m_class_name));
 		lua_pushstring(m_ls, func_name_.c_str());
 		lua_pushvalue(m_ls, -3);
 		lua_settable(m_ls, -3);
@@ -245,18 +268,19 @@ public:
 	template<typename RET>
 	fflua_register_t& def_class_property(RET CLASS_TYPE::* p_, const string& property_name_)
 	{
-		index_impl_func_t index_func       = &class_property_traits_t<CLASS_TYPE, RET>::process_index;
-		newindex_impl_func_t newindex_func = &class_property_traits_t<CLASS_TYPE, RET>::process_newindex;
+		typedef typename class_property_traits_t<CLASS_TYPE, RET>::process_index_func_t process_index_func_t;
+		typedef typename class_property_traits_t<CLASS_TYPE, RET>::process_newindex_func_t process_newindex_func_t;
+		process_index_func_t process_index       = &class_property_traits_t<CLASS_TYPE, RET>::process_index;
+		process_newindex_func_t process_newindex = &class_property_traits_t<CLASS_TYPE, RET>::process_newindex;
 
-		typedef lua_property_udata_t<RET CLASS_TYPE::*> reg_property_udata_t;
+		typedef userdata_for_class_property_t<RET CLASS_TYPE::*> udata_t;
 
-		reg_property_udata_t* ptr_udata = (reg_property_udata_t*)lua_newuserdata(m_ls, sizeof(reg_property_udata_t));
-		ptr_udata->reg_property.field_ptr = p_;
-
-		int udata_index = lua_gettop(m_ls);
-		ptr_udata->index_impl_func = index_func;
-		ptr_udata->newindex_impl_func = newindex_func;
-		ptr_udata->field_ptr = (void*)(&(ptr_udata->reg_property));
+		udata_t* pu 					= (udata_t*)lua_newuserdata(m_ls, sizeof(udata_t));
+		pu->property_info.property_pos 	= p_;
+		int udata_index               	= lua_gettop(m_ls);
+		pu->index_impl_func    			= process_index;
+		pu->newindex_impl_func 			= process_newindex;
+		pu->property_pos          		= (void*)(&(pu->property_info));
 
 		luaL_getmetatable(m_ls, lua_type_info_t<CLASS_TYPE>::get_name());
 		lua_pushstring(m_ls, property_name_.c_str());
@@ -285,15 +309,26 @@ private:
 };
 
 template<typename CLASS_TYPE, typename CTOR_TYPE>
-fflua_register_t<CLASS_TYPE, CTOR_TYPE>::fflua_register_t(lua_State* ls_, const string& class_name_):
+fflua_register_t<CLASS_TYPE, CTOR_TYPE>::fflua_register_t(lua_State* ls_, const string& class_name_, string inherit_name_):
 	m_ls(ls_),
 	m_class_name(class_name_)
 {
-	lua_type_info_t<CLASS_TYPE>::set_name(METATABLE_NAME(class_name_));
+	lua_type_info_t<CLASS_TYPE>::set_name(TO_METATABLE_NAME(class_name_), TO_METATABLE_NAME(inherit_name_));
 
-	luaL_newmetatable(ls_, METATABLE_NAME(class_name_));
+	luaL_newmetatable(ls_, TO_METATABLE_NAME(class_name_));
 	int  metatable_index = lua_gettop(ls_);
-
+	if (false == inherit_name_.empty())//! 设置基类
+	{
+		luaL_getmetatable(ls_, TO_METATABLE_NAME(inherit_name_));
+		if (lua_istable(ls_, -1))
+		{
+			lua_setfield(ls_, metatable_index, INHERIT_TABLE);
+		}
+		else
+		{
+			lua_pop(ls_, 1);
+		}
+	}
 	lua_pushstring(ls_, "__index");
 	lua_function_t index_function = &metatable_register_impl_t<CLASS_TYPE>::mt_index_function;
 	lua_pushcclosure(ls_, index_function, 0);
@@ -335,16 +370,13 @@ fflua_register_t<CLASS_TYPE, CTOR_TYPE>::fflua_register_t(lua_State* ls_, const 
 template <typename CLASS_TYPE>
 struct new_traits_t<CLASS_TYPE, void()>
 {
-    typedef void(*dest_func_t)();
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
-
     static  int lua_function(lua_State* ls_)
     {
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE());
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE());
         return 1;
     }
 };
@@ -352,24 +384,16 @@ struct new_traits_t<CLASS_TYPE, void()>
 template <typename CLASS_TYPE, typename ARG1>
 struct new_traits_t<CLASS_TYPE, void(ARG1)>
 {
-    typedef void(*dest_func_t)();
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
-
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1));
         return 1;
     }
 };
@@ -380,21 +404,16 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2)>
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2));
         return 1;
     }
 };
@@ -404,24 +423,19 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3)>
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
 
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3));
         return 1;
     }
 };
@@ -432,25 +446,20 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3, ARG4)>
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4));
         return 1;
     }
 };
@@ -462,27 +471,22 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3, ARG4,
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5));
         return 1;
     }
 };
@@ -494,29 +498,24 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3,
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6));
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6));
         return 1;
     }
 };
@@ -528,32 +527,27 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3,
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
 
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5,
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5,
                                                         arg6, arg7));
         return 1;
     }
@@ -566,33 +560,28 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3,
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6,
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6,
                                                         arg7, arg8));
         return 1;
     }
@@ -606,35 +595,30 @@ struct new_traits_t<CLASS_TYPE, void(ARG1, ARG2, ARG3,
 {
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. get closuser userdata. metatable(or typename) store in userdata.
-        //! 2. check arg valid.
-        //! 3. construct class instance, set the metatable
-        //! 4. return userdata to lua.
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(10), arg9);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, ARG_INDEX(10), arg9);
-
-        void* user_data_ptr = lua_newuserdata(ls_, sizeof(class_userdata_t<CLASS_TYPE>));
+        void* user_data_ptr = lua_newuserdata(ls_, sizeof(userdata_for_object_t<CLASS_TYPE>));
         luaL_getmetatable(ls_, lua_type_info_t<CLASS_TYPE>::get_name());
         lua_setmetatable(ls_, -2);
 
-        new(user_data_ptr) class_userdata_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6,
+        new(user_data_ptr) userdata_for_object_t<CLASS_TYPE>(new CLASS_TYPE(arg1, arg2, arg3, arg4, arg5, arg6,
                                                         arg7, arg8, arg9));
 
         return 1;
@@ -645,15 +629,15 @@ template <typename FUNC_CLASS_TYPE>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)()>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)();
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
     	void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
-        (obj_ptr->*(registed_data.dest_func))();
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
+        (obj_ptr->*(registed_data.real_func))();
         return 0;
     }
 };
@@ -662,22 +646,19 @@ template <typename FUNC_CLASS_TYPE, typename ARG1>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1);
+        (obj_ptr->*(registed_data.real_func))(arg1);
         return 0;
     }
 };
@@ -687,24 +668,21 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2);
         return 0;
     }
 };
@@ -713,25 +691,22 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3);
         return 0;
     }
 };
@@ -740,28 +715,25 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4);
         return 0;
     }
 };
@@ -771,31 +743,28 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5);
         return 0;
     }
 };
@@ -807,33 +776,30 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6);
         return 0;
     }
 };
@@ -844,35 +810,32 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6, ARG7)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
         return 0;
     }
 };
@@ -883,37 +846,34 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                                    ARG6, ARG7, ARG8)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
         return 0;
     }
 };
@@ -925,39 +885,36 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6, ARG7, ARG8, ARG9)>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, ARG_INDEX(10), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(10), arg9);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
         return 0;
     }
 };
@@ -966,15 +923,15 @@ template <typename FUNC_CLASS_TYPE>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)() const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)() const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
     	void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
-        (obj_ptr->*(registed_data.dest_func))();
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
+        (obj_ptr->*(registed_data.real_func))();
         return 0;
     }
 };
@@ -983,22 +940,19 @@ template <typename FUNC_CLASS_TYPE, typename ARG1>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1);
+        (obj_ptr->*(registed_data.real_func))(arg1);
         return 0;
     }
 };
@@ -1008,24 +962,21 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2);
         return 0;
     }
 };
@@ -1034,25 +985,22 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3>
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3);
         return 0;
     }
 };
@@ -1061,28 +1009,25 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4);
         return 0;
     }
 };
@@ -1092,31 +1037,28 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5);
         return 0;
     }
 };
@@ -1128,33 +1070,30 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6);
         return 0;
     }
 };
@@ -1165,35 +1104,32 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6, ARG7) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
         return 0;
     }
 };
@@ -1204,37 +1140,34 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                                    ARG6, ARG7, ARG8) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
         return 0;
     }
 };
@@ -1246,39 +1179,36 @@ struct class_function_traits_t<void (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4,
                                                               ARG6, ARG7, ARG8, ARG9) const>
 {
     typedef void (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, ARG_INDEX(10), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(10), arg9);
 
-        (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+        (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
         return 0;
     }
 };
@@ -1287,19 +1217,16 @@ template <typename FUNC_CLASS_TYPE, typename RET>
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)()>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)();
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
-        RET ret = (obj_ptr->*(registed_data.dest_func))();
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
+        RET ret = (obj_ptr->*(registed_data.real_func))();
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1309,23 +1236,20 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename RET>
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1335,25 +1259,22 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1363,27 +1284,24 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1393,29 +1311,26 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1425,32 +1340,29 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1462,34 +1374,31 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1500,36 +1409,33 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6, ARG7)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1540,38 +1446,35 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                                    ARG6, ARG7, ARG8)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1583,40 +1486,37 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6, ARG7, ARG8, ARG9)>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, ARG_INDEX(10), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(10), arg9);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1626,19 +1526,16 @@ template <typename FUNC_CLASS_TYPE, typename RET>
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)() const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)() const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
-        RET ret = (obj_ptr->*(registed_data.dest_func))();
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
+        RET ret = (obj_ptr->*(registed_data.real_func))();
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1648,23 +1545,20 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename RET>
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1674,25 +1568,22 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1702,27 +1593,24 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1732,29 +1620,26 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1764,32 +1649,29 @@ template <typename FUNC_CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3,
 struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1801,34 +1683,31 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1839,36 +1718,33 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6, ARG7) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1879,38 +1755,35 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                                    ARG6, ARG7, ARG8) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1922,40 +1795,37 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
                                                               ARG6, ARG7, ARG8, ARG9) const>
 {
     typedef RET (FUNC_CLASS_TYPE::*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9) const;
-    typedef register_data_t<dest_func_t>        dest_register_data_t;
+    typedef userdata_for_function_t<dest_func_t>        userdata_for_function_info;
 
     static  int lua_function(lua_State* ls_)
     {
-        //! 1. check user data, if arg type check failed, reutrn arg error info to lua.
-        //! 2. get the class dest, func, exe it.
-
         void* dest_data = lua_touserdata (ls_, lua_upvalueindex(1));
-        dest_register_data_t& registed_data = *((dest_register_data_t*)dest_data);
+        userdata_for_function_info& registed_data = *((userdata_for_function_info*)dest_data);
 
-        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::check_userdata_type(ls_);
+        FUNC_CLASS_TYPE* obj_ptr = metatable_register_impl_t<FUNC_CLASS_TYPE>::userdata_to_object(ls_);
 
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, ARG_INDEX(2), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, ARG_INDEX(3), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, ARG_INDEX(4), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, ARG_INDEX(5), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, ARG_INDEX(6), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, ARG_INDEX(7), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, ARG_INDEX(8), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, ARG_INDEX(9), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, ARG_INDEX(10), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(2), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(3), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(4), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(5), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(6), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(7), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(8), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(9), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(10), arg9);
 
-        RET ret = (obj_ptr->*(registed_data.dest_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        RET ret = (obj_ptr->*(registed_data.real_func))(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -1963,19 +1833,22 @@ struct class_function_traits_t<RET (FUNC_CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, 
 template <typename CLASS_TYPE, typename RET>
 struct class_property_traits_t
 {
+	typedef int (*process_index_func_t)(lua_State*, void*, const char*);
+	typedef int (*process_newindex_func_t)(lua_State*, void*, const char*, int);
+
 	typedef RET property_t;
 	typedef RET CLASS_TYPE::* property_ptr_t;
 	static int process_index(lua_State* ls_, void* field_info_, const char* key_)
 	{
-		typedef property_registry_t<property_ptr_t> property_registry_t;
-		CLASS_TYPE* obj_ptr = metatable_register_impl_t<CLASS_TYPE>::check_userdata_type(ls_);
+		typedef class_property_info_t<property_ptr_t> class_property_info_t;
+		CLASS_TYPE* obj_ptr = metatable_register_impl_t<CLASS_TYPE>::userdata_to_object(ls_);
 
-		property_registry_t* reg = (property_registry_t*)field_info_;
-		property_ptr_t ptr = reg->field_ptr;
+		class_property_info_t* reg = (class_property_info_t*)field_info_;
+		property_ptr_t ptr = reg->property_pos;
 
 		if (ptr)
 		{
-			lua_traits_t<property_t>::push_stack(ls_, (obj_ptr->*ptr));
+			lua_op_t<property_t>::push_stack(ls_, (obj_ptr->*ptr));
 			return 1;
 		}
 		else
@@ -1989,16 +1862,16 @@ struct class_property_traits_t
 
 	static int process_newindex(lua_State* ls_, void* field_info_, const char* key_, int value_index_)
 	{
-		typedef property_registry_t<property_ptr_t> property_registry_t;
-		CLASS_TYPE* obj_ptr = metatable_register_impl_t<CLASS_TYPE>::check_userdata_type(ls_);
+		typedef class_property_info_t<property_ptr_t> class_property_info_t;
+		CLASS_TYPE* obj_ptr = metatable_register_impl_t<CLASS_TYPE>::userdata_to_object(ls_);
 
-		property_registry_t* reg = (property_registry_t*)field_info_;
-		property_ptr_t ptr = reg->field_ptr;
+		class_property_info_t* reg = (class_property_info_t*)field_info_;
+		property_ptr_t ptr = reg->property_pos;
 
 		if (ptr)
 		{
 			property_t  value   = init_value_traits_t<property_t>::value();
-			lua_traits_t<property_t>::check_lua_param(ls_, value_index_, value);
+			lua_op_t<property_t>::lua_to_value(ls_, value_index_, value);
 			(obj_ptr->*ptr) = value;
 			return 0;
 		}
@@ -2033,9 +1906,9 @@ struct function_traits_t<void(*)(ARG1)>
     typedef void (*dest_func_t)(ARG1);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2051,11 +1924,11 @@ struct function_traits_t<void(*)(ARG1, ARG2)>
     typedef void (*dest_func_t)(ARG1, ARG2);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2071,13 +1944,13 @@ struct function_traits_t<void(*)(ARG1, ARG2, ARG3)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2093,15 +1966,15 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2118,17 +1991,17 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2144,19 +2017,19 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2173,21 +2046,21 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2204,23 +2077,23 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, LUA_ARG_INDEX(8), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(8), arg8);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2238,25 +2111,25 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, LUA_ARG_INDEX(8), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, LUA_ARG_INDEX(9), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(8), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(9), arg9);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
@@ -2277,7 +2150,7 @@ struct function_traits_t<RET (*)()>
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func();
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
 
         return 1;
     }
@@ -2289,14 +2162,14 @@ struct function_traits_t<RET (*)(ARG1)>
     typedef RET (*dest_func_t)(ARG1);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2307,16 +2180,16 @@ struct function_traits_t<RET (*)(ARG1, ARG2)>
     typedef RET (*dest_func_t)(ARG1, ARG2);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2327,19 +2200,19 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2350,21 +2223,21 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2376,23 +2249,23 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4, arg5);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2405,25 +2278,25 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4, arg5, arg6);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2435,27 +2308,27 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2467,29 +2340,29 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8)
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, LUA_ARG_INDEX(8), arg8);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(8), arg8);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };
@@ -2501,31 +2374,31 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8,
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
     static  int lua_function(lua_State* ls_)
     {
-        typename arg_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename arg_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename arg_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename arg_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename arg_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename arg_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename arg_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename arg_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
-        typename arg_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
 
-        lua_traits_t<ARG1>::check_lua_param(ls_, LUA_ARG_INDEX(1), arg1);
-        lua_traits_t<ARG2>::check_lua_param(ls_, LUA_ARG_INDEX(2), arg2);
-        lua_traits_t<ARG3>::check_lua_param(ls_, LUA_ARG_INDEX(3), arg3);
-        lua_traits_t<ARG4>::check_lua_param(ls_, LUA_ARG_INDEX(4), arg4);
-        lua_traits_t<ARG5>::check_lua_param(ls_, LUA_ARG_INDEX(5), arg5);
-        lua_traits_t<ARG6>::check_lua_param(ls_, LUA_ARG_INDEX(6), arg6);
-        lua_traits_t<ARG7>::check_lua_param(ls_, LUA_ARG_INDEX(7), arg7);
-        lua_traits_t<ARG8>::check_lua_param(ls_, LUA_ARG_INDEX(8), arg8);
-        lua_traits_t<ARG9>::check_lua_param(ls_, LUA_ARG_INDEX(9), arg9);
+        lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
+        lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
+        lua_op_t<ARG3>::lua_to_value(ls_, LUA_ARG_POS(3), arg3);
+        lua_op_t<ARG4>::lua_to_value(ls_, LUA_ARG_POS(4), arg4);
+        lua_op_t<ARG5>::lua_to_value(ls_, LUA_ARG_POS(5), arg5);
+        lua_op_t<ARG6>::lua_to_value(ls_, LUA_ARG_POS(6), arg6);
+        lua_op_t<ARG7>::lua_to_value(ls_, LUA_ARG_POS(7), arg7);
+        lua_op_t<ARG8>::lua_to_value(ls_, LUA_ARG_POS(8), arg8);
+        lua_op_t<ARG9>::lua_to_value(ls_, LUA_ARG_POS(9), arg9);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
         dest_func_t& registed_func = *((dest_func_t*)user_data);
 
         RET ret = registed_func(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-        lua_traits_t<RET>::push_stack(ls_, ret);
+        lua_op_t<RET>::push_stack(ls_, ret);
         return 1;
     }
 };

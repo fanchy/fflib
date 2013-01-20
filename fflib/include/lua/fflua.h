@@ -32,7 +32,7 @@ public:
             m_ls = NULL;
         }
     }
-    void stack_dump() const { lua_helper::stack_dump(m_ls); }
+    void dump_stack() const { fflua_tool_t::dump_stack(m_ls); }
 
     lua_State* get_lua_state()
     {
@@ -68,7 +68,7 @@ public:
 	{
 		if (luaL_dofile(m_ls, file_name_.c_str()))
 		{
-			string err = lua_helper::dump_error(m_ls, "cannot load file<%s>", file_name_.c_str());
+			string err = fflua_tool_t::dump_error(m_ls, "cannot load file<%s>", file_name_.c_str());
 			::lua_pop(m_ls, 1);
 			throw lua_exception_t(err);
 		}
@@ -84,7 +84,7 @@ public:
 
 		if (luaL_dostring(m_ls, str_))
 		{
-			string err = lua_helper::dump_error(m_ls, "fflua_t::run_string ::lua_pcall faled str<%s>", str_);
+			string err = fflua_tool_t::dump_error(m_ls, "fflua_t::run_string ::lua_pcall faled str<%s>", str_);
 			::lua_pop(m_ls, 1);
 			throw lua_exception_t(err);
 		}
@@ -123,7 +123,7 @@ public:
 
 		if (::lua_pcall(m_ls, 0, 0, 0) != 0)
 		{
-			string err = lua_helper::dump_error(m_ls, "lua_pcall faled func_name<%s>", func_name_);
+			string err = fflua_tool_t::dump_error(m_ls, "lua_pcall faled func_name<%s>", func_name_);
 			::lua_pop(m_ls, 1);
 			throw lua_exception_t(err);
 		}
@@ -196,7 +196,7 @@ int  fflua_t::get_global_variable(const char* field_name_, T& ret_)
      int ret = 0;
 
      lua_getglobal(m_ls, field_name_);
-     ret = lua_traits_t<T>::check_param(m_ls, -1, ret_);
+     ret = lua_op_t<T>::get_ret_value(m_ls, -1, ret_);
 
      lua_pop(m_ls, 1);
      return ret;
@@ -211,7 +211,7 @@ int  fflua_t::set_global_variable(const string& field_name_, const T& value_)
 template<typename T>
 int  fflua_t::set_global_variable(const char* field_name_, const T& value_)
 {
-    lua_traits_t<T>::push_stack(m_ls, value_);
+    lua_op_t<T>::push_stack(m_ls, value_);
     lua_setglobal(m_ls, field_name_);
     return 0;
 }
@@ -232,16 +232,16 @@ RET fflua_t::call(const char* func_name_) throw (lua_exception_t)
 
     if (lua_pcall(m_ls, 0, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg0] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg0] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -258,20 +258,20 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_) throw (lua_exception_t)
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
 
     if (lua_pcall(m_ls, 1, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg1] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg1] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -289,21 +289,21 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_)
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
 
     if (lua_pcall(m_ls, 2, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg2] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg2] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -320,22 +320,22 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
 
     if (lua_pcall(m_ls, 3, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg3] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg3] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -352,23 +352,23 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
 
     if (lua_pcall(m_ls, 4, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg4] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg4] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -385,24 +385,24 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
-    lua_traits_t<ARG5>::push_stack(m_ls, arg5_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG5>::push_stack(m_ls, arg5_);
 
     if (lua_pcall(m_ls, 5, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg5] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg5] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -420,25 +420,25 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
-    lua_traits_t<ARG5>::push_stack(m_ls, arg5_);
-    lua_traits_t<ARG6>::push_stack(m_ls, arg6_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG5>::push_stack(m_ls, arg5_);
+    lua_op_t<ARG6>::push_stack(m_ls, arg6_);
 
     if (lua_pcall(m_ls, 6, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg6] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg6] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -458,26 +458,26 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
-    lua_traits_t<ARG5>::push_stack(m_ls, arg5_);
-    lua_traits_t<ARG6>::push_stack(m_ls, arg6_);
-    lua_traits_t<ARG7>::push_stack(m_ls, arg7_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG5>::push_stack(m_ls, arg5_);
+    lua_op_t<ARG6>::push_stack(m_ls, arg6_);
+    lua_op_t<ARG7>::push_stack(m_ls, arg7_);
 
     if (lua_pcall(m_ls, 7, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg7] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg7] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -497,27 +497,27 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
-    lua_traits_t<ARG5>::push_stack(m_ls, arg5_);
-    lua_traits_t<ARG6>::push_stack(m_ls, arg6_);
-    lua_traits_t<ARG7>::push_stack(m_ls, arg7_);
-    lua_traits_t<ARG8>::push_stack(m_ls, arg8_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG5>::push_stack(m_ls, arg5_);
+    lua_op_t<ARG6>::push_stack(m_ls, arg6_);
+    lua_op_t<ARG7>::push_stack(m_ls, arg7_);
+    lua_op_t<ARG8>::push_stack(m_ls, arg8_);
 
     if (lua_pcall(m_ls, 8, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg8] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg8] get_ret_value failed  func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
@@ -537,28 +537,28 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
 
     lua_getglobal(m_ls, lua_string_tool_t::c_str(func_name_));
 
-    lua_traits_t<ARG1>::push_stack(m_ls, arg1_);
-    lua_traits_t<ARG2>::push_stack(m_ls, arg2_);
-    lua_traits_t<ARG3>::push_stack(m_ls, arg3_);
-    lua_traits_t<ARG4>::push_stack(m_ls, arg4_);
-    lua_traits_t<ARG5>::push_stack(m_ls, arg5_);
-    lua_traits_t<ARG6>::push_stack(m_ls, arg6_);
-    lua_traits_t<ARG7>::push_stack(m_ls, arg7_);
-    lua_traits_t<ARG8>::push_stack(m_ls, arg8_);
-    lua_traits_t<ARG9>::push_stack(m_ls, arg9_);
+    lua_op_t<ARG1>::push_stack(m_ls, arg1_);
+    lua_op_t<ARG2>::push_stack(m_ls, arg2_);
+    lua_op_t<ARG3>::push_stack(m_ls, arg3_);
+    lua_op_t<ARG4>::push_stack(m_ls, arg4_);
+    lua_op_t<ARG5>::push_stack(m_ls, arg5_);
+    lua_op_t<ARG6>::push_stack(m_ls, arg6_);
+    lua_op_t<ARG7>::push_stack(m_ls, arg7_);
+    lua_op_t<ARG8>::push_stack(m_ls, arg8_);
+    lua_op_t<ARG9>::push_stack(m_ls, arg9_);
 
     if (lua_pcall(m_ls, 9, 1, 0) != 0)
     {
-        string err = lua_helper::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
+        string err = fflua_tool_t::dump_error(m_ls, "lua_pcall failed func_name<%s>", func_name_);
         lua_pop(m_ls, 1);
         throw lua_exception_t(err);
     }
 
-    if (lua_traits_t<RET>::check_param(m_ls, -1, ret))
+    if (lua_op_t<RET>::get_ret_value(m_ls, -1, ret))
     {
         lua_pop(m_ls, 1);
         char buff[512];
-        snprintf(buff, sizeof(buff), "callfunc [arg9] check_param failed  func_name<%s>", func_name_);
+        snprintf(buff, sizeof(buff), "callfunc [arg9] get_ret_value failed func_name<%s>", func_name_);
         throw lua_exception_t(buff);
     }
 
