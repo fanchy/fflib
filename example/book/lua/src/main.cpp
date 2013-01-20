@@ -55,7 +55,8 @@ void lua_reg(lua_State* ls)
 
 	fflua_register_t<foo_t, ctor(int)>(ls, "foo_t", "base_t")
 				.def(&foo_t::print, "print")
-				.def(&foo_t::a, "a")
+				.def(&foo_t::a, "a");
+	fflua_register_t<>(ls)
 				.def(&foo_t::dumy, "dumy");
 }
 int main(int argc, char* argv[])
