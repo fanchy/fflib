@@ -41,8 +41,12 @@ public:
 	int a;
 };
 
-void dumy()
+void dumy(map<string, string> ret)
 {
+	for (map<string, string>::iterator it =  ret.begin(); it != ret.end(); ++it)
+	{
+		printf("i:%s, val:%s:\n", it->first.c_str(), it->second.c_str());
+	}
 	printf("in %s\n", __FUNCTION__);
 }
 
@@ -57,7 +61,7 @@ void lua_reg(lua_State* ls)
 				.def(&foo_t::print, "print")
 				.def(&foo_t::a, "a");
 	fflua_register_t<>(ls)
-				.def(&foo_t::dumy, "dumy");
+				.def(&dumy, "dumy");
 }
 int main(int argc, char* argv[])
 {
@@ -65,8 +69,13 @@ int main(int argc, char* argv[])
 	fflua_t fflua;
 	fflua.load_file("test.lua");
 	fflua.reg(lua_reg);
-	fflua.call<base_t*>("foo", 1)->dump();
+	vector<int> vt;vt.push_back(1);
+	map<string, string> mp;mp["ok"]="nice";
+	map<string, string> ret = fflua.call<map<string, string> >("foo", 1, vt, mp);
 
-
+	for (map<string, string>::iterator it =  ret.begin(); it != ret.end(); ++it)
+	{
+		printf("i:%s, val:%s:\n", it->first.c_str(), it->second.c_str());
+	}
     return 0;
 }
