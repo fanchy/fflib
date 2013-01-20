@@ -2,9 +2,6 @@
 #include <string>
 using namespace std;
 
-#include "detail/task_queue_impl.h"
-#include "thread.h"
-#include "log.h"
 #include "lua/fflua.h"
 
 using namespace ff;
