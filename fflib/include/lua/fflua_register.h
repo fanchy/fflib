@@ -1907,7 +1907,7 @@ struct function_traits_t<void(*)(ARG1)>
     typedef void (*dest_func_t)(ARG1);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
 
@@ -1925,8 +1925,8 @@ struct function_traits_t<void(*)(ARG1, ARG2)>
     typedef void (*dest_func_t)(ARG1, ARG2);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -1945,9 +1945,9 @@ struct function_traits_t<void(*)(ARG1, ARG2, ARG3)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -1967,10 +1967,10 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -1992,11 +1992,11 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2018,12 +2018,12 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2047,13 +2047,13 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2078,14 +2078,14 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2112,15 +2112,15 @@ struct function_traits_t<void (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8
     typedef void (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
-        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2163,7 +2163,7 @@ struct function_traits_t<RET (*)(ARG1)>
     typedef RET (*dest_func_t)(ARG1);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
 
         void* user_data = lua_touserdata (ls_, lua_upvalueindex(1));
@@ -2181,8 +2181,8 @@ struct function_traits_t<RET (*)(ARG1, ARG2)>
     typedef RET (*dest_func_t)(ARG1, ARG2);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
 
@@ -2201,9 +2201,9 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2224,10 +2224,10 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2250,11 +2250,11 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2279,12 +2279,12 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2309,13 +2309,13 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2341,14 +2341,14 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8)
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
@@ -2375,15 +2375,15 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8,
     typedef RET (*dest_func_t)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9);
     static  int lua_function(lua_State* ls_)
     {
-        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::init_value();
-        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::init_value();
-        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::init_value();
-        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::init_value();
-        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::init_value();
-        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::init_value();
-        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::init_value();
-        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::init_value();
-        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::init_value();
+        typename reference_traits_t<ARG1>::arg_type_t arg1 = init_value_traits_t<ARG1>::value();
+        typename reference_traits_t<ARG2>::arg_type_t arg2 = init_value_traits_t<ARG2>::value();
+        typename reference_traits_t<ARG3>::arg_type_t arg3 = init_value_traits_t<ARG3>::value();
+        typename reference_traits_t<ARG4>::arg_type_t arg4 = init_value_traits_t<ARG4>::value();
+        typename reference_traits_t<ARG5>::arg_type_t arg5 = init_value_traits_t<ARG5>::value();
+        typename reference_traits_t<ARG6>::arg_type_t arg6 = init_value_traits_t<ARG6>::value();
+        typename reference_traits_t<ARG7>::arg_type_t arg7 = init_value_traits_t<ARG7>::value();
+        typename reference_traits_t<ARG8>::arg_type_t arg8 = init_value_traits_t<ARG8>::value();
+        typename reference_traits_t<ARG9>::arg_type_t arg9 = init_value_traits_t<ARG9>::value();
 
         lua_op_t<ARG1>::lua_to_value(ls_, LUA_ARG_POS(1), arg1);
         lua_op_t<ARG2>::lua_to_value(ls_, LUA_ARG_POS(2), arg2);
