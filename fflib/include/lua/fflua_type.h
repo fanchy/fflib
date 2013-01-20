@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <lua.hpp>
 #include <string.h>
-
+#include <sstream>
 #include <vector>
 #include <map>
 using namespace std;
