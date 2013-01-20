@@ -2,12 +2,12 @@
 #include <iostream>
 using namespace std;
 
-#include "bus_i.h"
+#include "cqrs/bus_i.h"
 #include "user/user_mgr.h"
 #include "command/task_command.h"
 #include "task/task_service.h"
 #include "task/test_task.h"
-#include  "obj_tool.h"
+#include  "base/obj_tool.h"
 using namespace ff;
 
 #include "gtest/gtest.h"

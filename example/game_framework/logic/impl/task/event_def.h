@@ -2,7 +2,7 @@
 #ifndef _EVENT_DEF_I_
 #define _EVENT_DEF_I_
 
-#include "event_i.h"
+#include "cqrs/event_i.h"
 
 namespace ff
 {

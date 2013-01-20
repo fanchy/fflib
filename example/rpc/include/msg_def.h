@@ -2,7 +2,7 @@
 #ifndef _MSG_DEF_H_
 #define _MSG_DEF_H_
 
-#include "codec.h"
+#include "net/codec.h"
 
 using namespace ff;
 

@@ -1,8 +1,8 @@
 #include "manager_service.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "common_msg_def.h"
-#include "rpc_callback.h"
-#include "msg_sender.h"
+#include "rpc/rpc_callback.h"
+#include "net/msg_sender.h"
 
 using namespace ff;
 

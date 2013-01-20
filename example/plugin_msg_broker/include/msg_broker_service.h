@@ -4,8 +4,8 @@
 #include <map>
 using namespace std;
 
-#include "socket_i.h"
-#include "msg_handler_i.h"
+#include "net/socket_i.h"
+#include "net/msg_handler_i.h"
 #include "plugin_i.h"
 
 using namespace ff;

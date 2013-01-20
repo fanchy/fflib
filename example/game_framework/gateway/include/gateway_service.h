@@ -4,8 +4,8 @@
 
 #include "common_msg_def.h"
 
-#include "gateway_service_i.h"
-#include "msg_bus.h"
+#include "rpc/gateway_service_i.h"
+#include "rpc/msg_bus.h"
 
 namespace ff {
 

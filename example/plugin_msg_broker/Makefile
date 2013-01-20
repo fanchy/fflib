@@ -15,9 +15,9 @@ ARCH=
 BIN=msg_broker_server
 
 #源文件目录
-SrcDir= . ../../fflib/src src src/plugin_impl  ../../fflib/ext/generator
+SrcDir= . ../../fflib/base ../../fflib/net ../../fflib/rpc ../../fflib/cqrs ../../fflib/gtest/src ./src src/plugin_impl  ../../fflib/ext/generator
 #头文件目录
-IncDir= ./include  ../../fflib/include/ ../../fflib/ext/ ../../fflib/ext/generator /usr/include/python2.6/ /usr/local/include/ 
+IncDir= ./include  ../../fflib/ ../../fflib/ext/ ../../fflib/ext/generator /usr/include/python2.6/ /usr/local/include/  ../../fflib/gtest/include ../../fflib/gtest/
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))

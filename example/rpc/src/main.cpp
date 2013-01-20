@@ -2,7 +2,8 @@
 using namespace std;
 
 #include "msg_def.h"
-#include "msg_bus.h"
+#include "log/log.h"
+#include "rpc/msg_bus.h"
 
 using namespace ff;
 

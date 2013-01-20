@@ -6,12 +6,12 @@
 #include <iostream>
 using namespace std;
 
-#include "detail/acceptor_impl.h"
-#include "detail/epoll_impl.h"
-#include "thread.h"
-#include "smart_ptr/shared_ptr.h"
+#include "net/acceptor_impl.h"
+#include "net/epoll_impl.h"
+#include "base/thread.h"
+#include "base/shared_ptr.h"
 #include "msg_broker_service.h"
-#include "net_factory.h"
+#include "net/net_factory.h"
 
 void handler(int sig) {
     printf("signal:%d\n", sig);
@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
     char buff[128];
     snprintf(buff, sizeof(buff), "tcp://%s:%s", argv[1], argv[2]);
 
-    task_queue_pool_t tg;
+    task_queue_pool_t tg(1);
     thread_t thread;
     thread.create_thread(task_queue_pool_t::gen_task(&tg), 1);
 

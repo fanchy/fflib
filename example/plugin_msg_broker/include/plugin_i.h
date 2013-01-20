@@ -2,7 +2,7 @@
 #define _PLUGIN_H_
 
 #include "channel.h"
-#include "message.h"
+#include "net/message.h"
 
 using namespace ff;
 

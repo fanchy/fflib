@@ -1,10 +1,10 @@
 #include <iostream>
 using namespace std;
 
-#include "broker_service.h"
-#include "net_factory.h"
+#include "rpc/broker_service.h"
+#include "net/net_factory.h"
 
-#include "broker_application.h"
+#include "rpc/broker_application.h"
 using namespace ff;
 
 int main(int argc, char* argv[])

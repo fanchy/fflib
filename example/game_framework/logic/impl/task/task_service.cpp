@@ -1,6 +1,6 @@
 #include "task_service.h"
 #include "command/task_command.h"
-#include "bus_i.h"
+#include "cqrs/bus_i.h"
 
 #include "user/user_mgr.h"
 using namespace ff;

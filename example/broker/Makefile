@@ -15,9 +15,9 @@ ARCH=
 BIN=app_broker
 
 #源文件目录
-SrcDir= . src  ../../fflib/src
+SrcDir= . src  ../../fflib/base ../../fflib/net ../../fflib/rpc ../../fflib/cqrs
 #头文件目录
-IncDir= ./include ../../fflib/include/  ../../fflib/ext
+IncDir= ./include ../../fflib/  ../../fflib/ext
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))
@@ -38,7 +38,7 @@ $(BIN):$(OBJS)
 # @$(LN) $(shell pwd)/$(LIB_NAME).$(LIB_VER) /lib/$(LIB_NAME)
 
 %.o:%.cpp
-	@echo -e "[$(ARCH)] \t\tCompileing $@..."
+	@echo -e "[$(ARCH)] \t\tCompiling $@..."
 	@$(CC) $(CFLAGS)  -c $< -o $@
 .PHONY: clean
 clean:

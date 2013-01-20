@@ -1,9 +1,9 @@
 #include <iostream>
 using namespace std;
 
-#include "detail/task_queue_impl.h"
-#include "thread.h"
-#include "log.h"
+#include "base/task_queue_impl.h"
+#include "base/thread.h"
+#include "base/log.h"
 
 using namespace ff;
 

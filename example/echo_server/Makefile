@@ -15,9 +15,9 @@ ARCH=
 BIN=app_echo_server 
 
 #源文件目录
-SrcDir= . src  ../../fflib/src
+SrcDir= . src  ../../fflib/base ../../fflib/net ../../fflib/rpc ../../fflib/cqrs
 #头文件目录
-IncDir= ./include ../../fflib/include/ ../../fflib/ext  
+IncDir= ./include ../../fflib/ ../../fflib/ext  
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))

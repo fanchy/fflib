@@ -2,11 +2,11 @@
 using namespace std;
 
 #include "common_msg_def.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "log/log.h"
 
 #include "gateway_service.h"
-#include "broker_application.h"
+#include "rpc/broker_application.h"
 
 using namespace ff;
 

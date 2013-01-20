@@ -15,9 +15,9 @@ ARCH=
 BIN=app_cqrs
 
 #源文件目录
-SrcDir= . task ../../fflib/src ../../fflib/gtest/src
+SrcDir= . task ../../fflib/base ../../fflib/net ../../fflib/rpc ../../fflib/cqrs ../../fflib/gtest/src
 #头文件目录
-IncDir= .  ./cqrs  ./include ../../fflib/include/  ../../fflib/ext ../../fflib/gtest ../../fflib/gtest/include
+IncDir= .  ./cqrs  ./include ../../fflib/  ../../fflib/ext ../../fflib/gtest ../../fflib/gtest/include
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))

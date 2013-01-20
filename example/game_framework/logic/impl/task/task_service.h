@@ -2,7 +2,7 @@
 #ifndef _FF_TASK_SERVICE_H_
 #define _FF_TASK_SERVICE_H_
 
-#include "utility/singleton.h"
+#include "base/singleton.h"
 
 namespace ff
 {

@@ -17,7 +17,7 @@ BIN=app_ranklist
 #源文件目录
 SrcDir= . src  
 #头文件目录
-IncDir= ./include ../../fflib/include/  ../../fflib/ext
+IncDir= ./include ../../fflib/  ../../fflib/ext
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))

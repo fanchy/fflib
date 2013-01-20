@@ -2,8 +2,8 @@
 #ifndef _USER_TASKS_I_
 #define _USER_TASKS_I_
 
-#include "aggregate_root_i.h"
-#include "bus_i.h"
+#include "cqrs/aggregate_root_i.h"
+#include "cqrs/bus_i.h"
 
 #include <map>
 #include <stdexcept>

@@ -2,8 +2,8 @@
 #ifndef _FF_COMMAD_I_
 #define _FF_COMMAD_I_
 
-#include "type_i.h"
-#include "codec.h"
+#include "base/type_i.h"
+#include "net/codec.h"
 
 namespace ff
 {

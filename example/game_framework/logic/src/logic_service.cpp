@@ -1,11 +1,11 @@
 #include "logic_service.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "common_msg_def.h"
 #include "logic_msg_def.h"
-#include "rpc_callback.h"
-#include "msg_sender.h"
+#include "rpc/rpc_callback.h"
+#include "net/msg_sender.h"
 #include "user/user_mgr.h"
-#include "bus_i.h"
+#include "cqrs/bus_i.h"
 using namespace ff;
 
 logic_service_t::logic_service_t()

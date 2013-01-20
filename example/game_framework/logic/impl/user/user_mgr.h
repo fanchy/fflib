@@ -3,7 +3,7 @@
 #define _FF_USER_MGR_H_
 
 #include "user/user.h"
-#include "utility/singleton.h"
+#include "base/singleton.h"
 
 #include <map>
 #include <stdexcept>

@@ -2,7 +2,7 @@
 #include "gtest/gtest.h"
 #include "user_task.h"
 #include "event_def.h"
-#include "bus_i.h"
+#include "cqrs/bus_i.h"
 using namespace ff;
 
 #include <iostream>

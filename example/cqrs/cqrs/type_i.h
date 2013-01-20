@@ -2,8 +2,8 @@
 #ifndef _FF_TYPE_I_
 #define _FF_TYPE_I_
 
-#include "utility/singleton.h"
-#include "lock.h"
+#include "base/singleton.h"
+#include "base/lock.h"
 #include <string>
 #include <map>
 using namespace std;

@@ -2,12 +2,12 @@
 using namespace std;
 
 #include "common_msg_def.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "log/log.h"
 
 #include "logic_service.h"
 
-#include "bus_i.h"
+#include "cqrs/bus_i.h"
 #include "user/user_mgr.h"
 #include "command/task_command.h"
 #include "task/task_service.h"

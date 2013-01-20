@@ -2,7 +2,7 @@
 #ifndef _FF_TASK_COMMAND_H_
 #define _FF_TASK_COMMAND_H_
 
-#include "command_i.h"
+#include "cqrs/command_i.h"
 
 namespace ff
 {

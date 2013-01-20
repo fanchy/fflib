@@ -1,7 +1,7 @@
 #ifndef _CHANNEL_H_
 #define _CHANNEL_H_
 
-#include "socket_i.h"
+#include "net/socket_i.h"
 
 using namespace ff;
 

@@ -4,7 +4,7 @@
 using namespace std;
 
 #include "msg_def.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "log/log.h"
 
 using namespace ff;

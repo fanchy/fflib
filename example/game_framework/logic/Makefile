@@ -15,9 +15,9 @@ ARCH=
 BIN=app_logic
 
 #源文件目录
-SrcDir= . src  ../../../fflib/src ../../../fflib/gtest/src  impl/task
+SrcDir= . src  ../../../fflib/base ../../../fflib/net ../../../fflib/rpc ../../../fflib/cqrs ../../../fflib/gtest/src  impl/task
 #头文件目录
-IncDir= ../common_include ./include ../../../fflib/include/ ../../../fflib/ext ./impl/ ../../../fflib/gtest/include ../../../fflib/gtest  
+IncDir= ../common_include ./include ../../../fflib/ ../../../fflib/ext ./impl/ ../../../fflib/gtest/include ../../../fflib/gtest  
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))

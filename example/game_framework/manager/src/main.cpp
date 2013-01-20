@@ -2,7 +2,7 @@
 using namespace std;
 
 #include "common_msg_def.h"
-#include "msg_bus.h"
+#include "rpc/msg_bus.h"
 #include "log/log.h"
 
 #include "manager_service.h"
