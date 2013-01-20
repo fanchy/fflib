@@ -201,6 +201,17 @@ template <typename FUNC_TYPE>
 struct function_traits_t;
 
 //! CLASS_TYPE 为要注册的类型, CTOR_TYPE为构造函数类型
+template<typename T>
+struct fflua_register_router_t;
+template<typename T>
+struct fflua_register_router_t
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, T arg_, const string& s_)
+	{
+		reg_->def_class_property(arg_, s_);
+	}
+};
 template<typename CLASS_TYPE, typename CTOR_TYPE = void()>
 class fflua_register_t
 {
@@ -211,7 +222,8 @@ public:
 	template<typename FUNC_TYPE>
 	fflua_register_t& def(FUNC_TYPE func, const string& s_)
 	{
-		//TODO
+		fflua_register_router_t<FUNC_TYPE>::call(this, func, s_);
+		return *this;
 	}
 	template<typename FUNC_TYPE>
 	fflua_register_t& def_class_func(FUNC_TYPE func_, const string& func_name_)
@@ -2518,6 +2530,275 @@ struct function_traits_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8,
     }
 };
 
+template<typename RET>
+struct fflua_register_router_t<RET (*)()>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1>
+struct fflua_register_router_t<RET (*)(ARG1)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+template<typename RET, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8, typename ARG9>
+struct fflua_register_router_t<RET (*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9), const string& s_)
+	{
+		reg_->def_func(arg_, s_);
+	}
+};
+
+template<typename RET, typename CLASS_TYPE>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)()>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)() , const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8, typename ARG9>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9)>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9), const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+
+template<typename RET, typename CLASS_TYPE>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)() const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)() const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
+template<typename RET, typename CLASS_TYPE, typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8, typename ARG9>
+struct fflua_register_router_t<RET (CLASS_TYPE::*)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9) const>
+{
+	template<typename REG_TYPE>
+	static void call(REG_TYPE* reg_, RET (CLASS_TYPE::*arg_)(ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, ARG7, ARG8, ARG9) const, const string& s_)
+	{
+		reg_->def_class_func(arg_, s_);
+	}
+};
 }
 
 #endif
