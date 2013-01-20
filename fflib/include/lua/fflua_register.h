@@ -235,10 +235,11 @@ struct fflua_register_router_t
 		reg_->def_class_property(arg_, s_);
 	}
 };
-template<typename CLASS_TYPE, typename CTOR_TYPE = void()>
+template<typename CLASS_TYPE = op_tool_t, typename CTOR_TYPE = void()>
 class fflua_register_t
 {
 public:
+	fflua_register_t(lua_State* ls_):m_ls(ls_){}
 	fflua_register_t(lua_State* ls_, const string& class_name_, string inherit_name_ = "");
 
 
