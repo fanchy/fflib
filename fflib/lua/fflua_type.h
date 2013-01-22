@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sstream>
 #include <vector>
+#include <list>
+#include <set>
 #include <map>
 using namespace std;
 
@@ -755,10 +757,11 @@ struct lua_op_t<vector<T> >
     static void push_stack(lua_State* ls_, const vector<T>& arg_)
     {
     	lua_newtable(ls_);
-    	for (unsigned int i = 0; i < arg_.size(); ++i)
+    	typename vector<T>::const_iterator it = arg_.begin();
+    	for (int i = 1; it != arg_.end(); ++it, ++i)
     	{
-    		lua_op_t<unsigned int>::push_stack(ls_, i+1);
-    		lua_op_t<T>::push_stack(ls_, arg_[i]);
+    		lua_op_t<int>::push_stack(ls_, i);
+    		lua_op_t<T>::push_stack(ls_, *it);
 			lua_settable(ls_, -3);
     	}
     }
@@ -799,6 +802,122 @@ struct lua_op_t<vector<T> >
 			{
 				luaL_argerror(ls_, pos_>0?pos_:-pos_, "convert to vector failed");
 			}
+			lua_pop(ls_, 1);
+		}
+		return 0;
+    }
+};
+
+template<typename T>
+struct lua_op_t<list<T> >
+{
+    static void push_stack(lua_State* ls_, const list<T>& arg_)
+    {
+    	lua_newtable(ls_);
+    	typename list<T>::const_iterator it = arg_.begin();
+    	for (int i = 1; it != arg_.end(); ++it, ++i)
+    	{
+    		lua_op_t<int>::push_stack(ls_, i);
+    		lua_op_t<T>::push_stack(ls_, *it);
+			lua_settable(ls_, -3);
+    	}
+    }
+
+    static int get_ret_value(lua_State* ls_, int pos_, list<T>& param_)
+    {
+    	if (0 == lua_istable(ls_, pos_))
+    	{
+    		return -1;
+    	}
+    	lua_pushnil(ls_);
+    	int real_pos = pos_;
+    	if (pos_ < 0) real_pos = real_pos - 1;
+
+		while (lua_next(ls_, real_pos) != 0)
+		{
+			param_.push_back(T());
+			if (lua_op_t<T>::get_ret_value(ls_, -1, (param_.back())) < 0)
+			{
+				return -1;
+			}
+			lua_pop(ls_, 1);
+		}
+       return 0;
+    }
+
+    static int lua_to_value(lua_State* ls_, int pos_, list<T>& param_)
+    {
+    	luaL_checktype(ls_, pos_, LUA_TTABLE);
+
+		lua_pushnil(ls_);
+    	int real_pos = pos_;
+    	if (pos_ < 0) real_pos = real_pos - 1;
+		while (lua_next(ls_, real_pos) != 0)
+		{
+			param_.push_back(T());
+			if (lua_op_t<T>::lua_to_value(ls_, -1, (param_.back())) < 0)
+			{
+				luaL_argerror(ls_, pos_>0?pos_:-pos_, "convert to vector failed");
+			}
+			lua_pop(ls_, 1);
+		}
+		return 0;
+    }
+};
+
+template<typename T>
+struct lua_op_t<set<T> >
+{
+    static void push_stack(lua_State* ls_, const set<T>& arg_)
+    {
+    	lua_newtable(ls_);
+    	typename set<T>::const_iterator it = arg_.begin();
+    	for (int i = 1; it != arg_.end(); ++it, ++i)
+    	{
+    		lua_op_t<int>::push_stack(ls_, i);
+    		lua_op_t<T>::push_stack(ls_, *it);
+			lua_settable(ls_, -3);
+    	}
+    }
+
+    static int get_ret_value(lua_State* ls_, int pos_, set<T>& param_)
+    {
+    	if (0 == lua_istable(ls_, pos_))
+    	{
+    		return -1;
+    	}
+    	lua_pushnil(ls_);
+    	int real_pos = pos_;
+    	if (pos_ < 0) real_pos = real_pos - 1;
+
+		while (lua_next(ls_, real_pos) != 0)
+		{
+			T val = init_value_traits_t<T>::value();
+			if (lua_op_t<T>::get_ret_value(ls_, -1, val) < 0)
+			{
+				return -1;
+			}
+			param_.insert(val);
+			lua_pop(ls_, 1);
+		}
+       return 0;
+    }
+
+    static int lua_to_value(lua_State* ls_, int pos_, set<T>& param_)
+    {
+    	luaL_checktype(ls_, pos_, LUA_TTABLE);
+
+		lua_pushnil(ls_);
+    	int real_pos = pos_;
+    	if (pos_ < 0) real_pos = real_pos - 1;
+		while (lua_next(ls_, real_pos) != 0)
+		{
+			T val = init_value_traits_t<T>::value();
+			if (lua_op_t<T>::lua_to_value(ls_, -1, val) < 0)
+			{
+				luaL_argerror(ls_, pos_>0?pos_:-pos_, "convert to vector failed");
+			}
+			param_.insert(val);
 			lua_pop(ls_, 1);
 		}
 		return 0;

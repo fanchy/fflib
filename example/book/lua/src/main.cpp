@@ -38,7 +38,7 @@ public:
 	int a;
 };
 
-void dumy(map<string, string> ret)
+void dumy(map<string, string> ret, vector<int> a, list<string> b, set<long> c)
 {
 	for (map<string, string>::iterator it =  ret.begin(); it != ret.end(); ++it)
 	{
@@ -68,7 +68,8 @@ int main(int argc, char* argv[])
 	fflua.reg(lua_reg);
 	vector<int> vt;vt.push_back(1);
 	map<string, string> mp;mp["ok"]="nice";
-	map<string, string> ret = fflua.call<map<string, string> >("foo", 1, vt, mp);
+	map<string, string> ret ;
+	fflua.call<set<int> >("foo", 1, vt, mp, list<float>(), set<int>());
 
 	for (map<string, string>::iterator it =  ret.begin(); it != ret.end(); ++it)
 	{
