@@ -568,7 +568,7 @@ template<> struct lua_op_t<double>
 		return 0;
 	}
 };
-template<> struct lua_op_t<long>
+/*template<> struct lua_op_t<long>
 {
 
 	static void push_stack(lua_State* ls_, long arg_)
@@ -589,7 +589,7 @@ template<> struct lua_op_t<long>
 		param_ = (long)luaL_checknumber(ls_, pos_);
 		return 0;
 	}
-};
+};*/
 template<>
 struct lua_op_t<void*>
 {

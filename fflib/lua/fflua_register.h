@@ -193,8 +193,8 @@ struct metatable_register_impl_t
 	static int get_pointer(lua_State* ls_)
 	{
 		CLASS_TYPE** obj_ptr = userdata_to_object_ptr_address(ls_);
-		long  addr = long(*obj_ptr);
-		lua_op_t<long>::push_stack(ls_, addr);
+		int64_t  addr = int64_t(*obj_ptr);
+		lua_op_t<int64_t>::push_stack(ls_, addr);
 		return 1;
 	}
 };

@@ -21,7 +21,7 @@ public:
     fflua_t():
 		m_ls(NULL)
 	{
-		m_ls = ::lua_open();
+		m_ls = ::luaL_newstate();
 		::luaL_openlibs(m_ls);
 	}
     virtual ~fflua_t()
