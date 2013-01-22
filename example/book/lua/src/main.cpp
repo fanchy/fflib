@@ -28,7 +28,7 @@ public:
 	}
 	void print(int64_t a, base_t* p) const
 	{
-		printf("in foo_t::print a:%lld p:%p\n", a, p);
+		printf("in foo_t::print a:%ld p:%p\n", (long)a, p);
 	}
 
 	static void dumy()
@@ -38,7 +38,7 @@ public:
 	int a;
 };
 
-void dumy(map<string, string> ret, vector<int> a, list<string> b, set<long> c)
+void dumy(map<string, string> ret, vector<int> a, list<string> b, set<int64_t> c)
 {
 	for (map<string, string>::iterator it =  ret.begin(); it != ret.end(); ++it)
 	{
