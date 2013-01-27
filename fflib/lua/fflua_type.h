@@ -12,6 +12,9 @@
 #include <map>
 using namespace std;
 
+namespace ff
+{
+
 #define INHERIT_TABLE "inherit_table"
 
 struct lua_string_tool_t
@@ -986,4 +989,6 @@ struct lua_op_t<map<K, V> >
 		return 0;
     }
 };
+
+}
 #endif

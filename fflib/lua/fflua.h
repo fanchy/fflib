@@ -11,6 +11,9 @@ using namespace std;
 #include "lua/fflua_type.h"
 #include "lua/fflua_register.h"
 
+namespace ff
+{
+
 class fflua_t
 {
     enum STACK_MIN_NUM_e
@@ -80,8 +83,6 @@ public:
 
     void run_string(const char* str_) throw (lua_exception_t)
 	{
-		lua_checkstack(m_ls, STACK_MIN_NUM);
-
 		if (luaL_dostring(m_ls, str_))
 		{
 			string err = fflua_tool_t::dump_error(m_ls, "fflua_t::run_string ::lua_pcall faled str<%s>", str_);
@@ -567,4 +568,5 @@ RET fflua_t::call(const char* func_name_, ARG1 arg1_, ARG2 arg2_, ARG3 arg3_,
     return ret;
 }
 
+}
 #endif
