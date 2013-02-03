@@ -1,0 +1,8 @@
+
+<game type = "good">
+    <scene>happly</scene>
+    <role ID="123456"  pos = "any">
+        <name nick = "xx" >OhNice</name>
+        <num>99</num>
+    </role>
+</game>
