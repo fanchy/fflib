@@ -1,6 +1,8 @@
 #ifndef _STRTOOL_H_
 #define _STRTOOL_H_
 
+
+#include <string.h>
 #include <iostream>
 #include <vector>
 using namespace std;
@@ -77,6 +79,32 @@ static string replace(const string& str, const string& src, const string& dest)
     return ret;
 }
 
+size_t utf8_words_num(const char* s_)
+{
+    size_t ret = 0;
+    const char* p = s_;
+    for (unsigned char c = (unsigned char)(*p); c != 0; c = (unsigned char)(*p))
+    {
+        ++ret;
+        if (c <= 127)
+        {
+            p += 1;
+        }
+        else if (c < 192)
+        {
+            p   += 2;
+        }
+        else if (c < 223)
+        {
+            p   += 3;
+        }
+        else
+        {
+            p   += 4;
+        }
+    }
+    return ret;
+}
 };
 
 typedef strtool strtool_t;
