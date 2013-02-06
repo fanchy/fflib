@@ -79,5 +79,6 @@ static string replace(const string& str, const string& src, const string& dest)
 
 };
 
+typedef strtool strtool_t;
 #endif
 
