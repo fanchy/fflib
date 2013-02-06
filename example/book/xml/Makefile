@@ -15,9 +15,9 @@ ARCH=
 BIN=app_xml
 
 #源文件目录
-SrcDir= .   ../../../fflib/base ../../../fflib/net ../../../fflib/rpc ../../../fflib/cqrs  ../../../fflib/xml
+SrcDir= .  ../../../fflib/xml
 #头文件目录
-IncDir= ./include ../../../fflib/ ../../../fflib/include/lua/  ../../../fflib/ext
+IncDir=  ../../../fflib/ 
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))
