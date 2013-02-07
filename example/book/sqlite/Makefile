@@ -45,4 +45,4 @@ $(BIN):$(OBJS)
 .PHONY: clean
 clean:
 	@echo -e "[$(ARCH)] \tCleaning files..."
-	@$(RM) $(OBJS) $(BIN)
+	@$(RM) $(OBJS) $(BIN) sqlite3.o
