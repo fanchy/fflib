@@ -34,12 +34,12 @@ int main(int argc, char* argv[])
     ffdb_t ffdb;
     foo_t foo;
     vector<vector<string> > ret_data;
-    if (ffdb.connect("/test.db"))
+    if (ffdb.connect("sqlite://./test.db"))
     {
         printf("connect error:%s, %d\n", ffdb.error_msg(), ffdb.is_connected());
         return 1;
     }
-    if (ffdb.exe_sql("CREATE TABLE  dumy (A int, c float, b varchar(200), primary key (A))"))
+    if (ffdb.exe_sql("CREATE TABLE  IF NOT EXISTS dumy (A int, c float, b varchar(200), primary key (A))"))
     {
         printf("exe error:%s\n", ffdb.error_msg());
     }
@@ -60,7 +60,10 @@ int main(int argc, char* argv[])
     printf("foo select:<%s>\n", foo.select_sql().c_str());
     printf("foo update:<%s>\n", foo.update_sql().c_str());
     printf("foo delete:<%s>\n", foo.del_sql().c_str());
-    //foo.insert(ffdb);
+    if (foo.insert(ffdb))
+    {
+        printf("exist foo insert:<%s>\n", foo.insert_sql().c_str());
+    }
     foo.select(ffdb);
     if (ffdb.exe_sql("select * from dumy", ret_data))
     {
