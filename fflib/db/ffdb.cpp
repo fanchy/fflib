@@ -1,6 +1,7 @@
 
 #include "db/ffdb.h"
 #include "db/sqlite_ops.h"
+#include "base/strtool.h"
 using namespace ff;
 
 ffdb_t::ffdb_t():
@@ -18,7 +19,13 @@ int  ffdb_t::connect(const string& args_)
 {
     close();
     m_db_ops = new sqlite_ops_t();
-    return m_db_ops->connect(args_);
+    vector<string> str_vt;
+    strtool_t::split(args_, str_vt, "://");
+    if (str_vt.size() == 2 && str_vt[0] == "sqlite")
+    {
+        return m_db_ops->connect(str_vt[1]);
+    }
+    return -1;
 }
 
 bool ffdb_t::is_connected()
