@@ -26,7 +26,10 @@ public:
         data.resize(col_num_);
         for (int i = 0; i < col_num_; ++i)
         {
-            data[i].assign(col_datas_[i], col_length_[i]);
+            if (col_datas_[i])
+            {
+                data[i].assign(col_datas_[i], col_length_[i]);
+            }
         }
         if (m_col_name && (*m_col_name).empty())
         {
