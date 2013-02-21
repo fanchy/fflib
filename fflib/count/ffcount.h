@@ -34,7 +34,7 @@ public:
             ss << arg1_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
     }
     template<typename ARG1, typename ARG2>
@@ -53,6 +53,7 @@ public:
             ss << arg2_;
             ss >> ret;
             m_values.push_back(ret);
+            ss.clear();
             ret.clear();
         }
     }
@@ -65,19 +66,20 @@ public:
             ss << arg1_;
             ss >> ret;
             m_values.push_back(ret);
+            ss.clear();
             ret.clear();
         }
         {
             ss << arg2_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg3_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
     }
     template<typename ARG1, typename ARG2, typename ARG3, typename ARG4>
@@ -89,25 +91,25 @@ public:
             ss << arg1_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg2_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg3_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg4_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
     }
     template<typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5>
@@ -119,31 +121,31 @@ public:
             ss << arg1_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg2_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg3_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg4_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg5_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
     }
     template<typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6>
@@ -155,37 +157,37 @@ public:
             ss << arg1_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg2_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg3_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg4_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg5_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
         {
             ss << arg6_;
             ss >> ret;
             m_values.push_back(ret);
-            ret.clear();
+            ss.clear();ret.clear();
         }
     }
 
