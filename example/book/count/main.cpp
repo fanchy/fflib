@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
     
     ffcount_t ffcount;
     
-    int ret = ffcount.add_event(el);
+    int ret = ffcount.save_event(el);
     printf("add event ret=%d\n", ret);
     
     ffcount.query("select * from dumy");
