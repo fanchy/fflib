@@ -19,10 +19,11 @@ namespace ff
 class event_log_t
 {
 public:
+    event_log_t(){}
     event_log_t(const string& table_name_, const string& field_name_):
-        m_table_names(table_name_)
+        m_table_names(table_name_),
+        m_field_names(field_name_)
     {
-        strtool_t::split(field_name_, m_field_names, ",");
     }
     virtual ~event_log_t(){}
     template<typename ARG1>
@@ -193,7 +194,7 @@ public:
 
 public:
     string              m_table_names;
-    vector<string>      m_field_names;
+    string              m_field_names;
     vector<string>      m_values;
 };
 
@@ -214,15 +215,17 @@ public:
     {
         char buff[1024];
         int n = snprintf(buff, sizeof(buff), "INSERT INTO %s (", event_log_.m_table_names.c_str());
-        for (size_t i = 0; i < event_log_.m_field_names.size(); ++i)
+        vector<string> str_vt;
+        strtool_t::split(event_log_.m_field_names, str_vt, ",");
+        for (size_t i = 0; i < str_vt.size(); ++i)
         {
             if (i == 0)
             {
-                n += snprintf(buff + n, sizeof(buff) - n, "%s", event_log_.m_field_names[i].c_str());
+                n += snprintf(buff + n, sizeof(buff) - n, "%s", str_vt[i].c_str());
             }
             else
             {
-                n += snprintf(buff + n, sizeof(buff) - n, ",%s", event_log_.m_field_names[i].c_str());
+                n += snprintf(buff + n, sizeof(buff) - n, ",%s", str_vt[i].c_str());
             }
         }
         n += snprintf(buff + n, sizeof(buff) - n, ") VALUES (");
