@@ -9,23 +9,35 @@ using namespace std;
 
 #include <string.h>
 #include <stdio.h>
-
+ 
 #include "base/strtool.h"
 #include "db/ffdb.h"
+#include "net/codec.h"
+#include "base/task_queue_impl.h"
+#include "rpc/msg_bus.h"
 
 namespace ff
 {
 
-class event_log_t
+class event_log_t : public msg_i
 {
 public:
-    event_log_t(){}
+    event_log_t():msg_i("event_log_t"){}
     event_log_t(const string& table_name_, const string& field_name_):
+        msg_i("event_log_t"),
         m_table_names(table_name_),
         m_field_names(field_name_)
     {
     }
     virtual ~event_log_t(){}
+    virtual string encode()
+    {
+        return (init_encoder()<< m_table_names << m_field_names << m_values).get_buff();
+    }
+    virtual void decode(const string& src_buff_)
+    {
+        init_decoder(src_buff_) >> m_table_names >> m_field_names >> m_values;
+    }
     template<typename ARG1>
     void def(const ARG1& arg1_)
     {
@@ -197,7 +209,22 @@ public:
     string              m_field_names;
     vector<string>      m_values;
 };
-
+struct event_ret_t: public msg_i
+{
+    event_ret_t():
+        msg_i("event_ret_t"),
+        value(true)
+    {}
+    virtual string encode()
+    {
+        return (init_encoder() << value).get_buff();
+    }
+    virtual void decode(const string& src_buff_)
+    {
+        init_decoder(src_buff_) >> value;
+    }
+    bool value;
+};
 
 class ffcount_t
 {
@@ -211,7 +238,7 @@ public:
         }
     }
     virtual ~ffcount_t(){}
-    int add_event(const event_log_t& event_log_)
+    int save_event(const event_log_t& event_log_)
     {
         char buff[1024];
         int n = snprintf(buff, sizeof(buff), "INSERT INTO %s (", event_log_.m_table_names.c_str());
@@ -270,6 +297,67 @@ public:
 protected:
     ffdb_t     m_ffdb;
 };
+
+class ffcount_service_t
+{
+    struct table_info_t
+    {
+        table_info_t():
+            tq(NULL){}
+        task_queue_t*    tq;
+        ffcount_t        ffcount;
+    };
+    typedef map<string, table_info_t> table_info_map_t;
+public:
+    ffcount_service_t():
+        m_index(0)
+    {}
+    int start(string config_ = "")
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            m_all_tq.push_back(new task_queue_t());
+            m_thread.create_thread(task_binder_t::gen(&task_queue_t::run, m_all_tq[i]), 1);
+        }
+        return 0;
+    }
+    int stop()
+    {
+        for (unsigned int i = 0; i < m_all_tq.size(); ++i)
+        {
+            m_all_tq[i]->close();
+            delete m_all_tq[i];
+        }
+        m_all_tq.clear();
+        return 0;
+    }
+
+    void save_event(event_log_t& in_msg_, rpc_callcack_t<event_ret_t>& cb_)
+    {
+        event_ret_t ret;
+        cb_(ret);
+        table_info_map_t::iterator it = m_db_info.find(in_msg_.m_table_names);
+        if (it == m_db_info.end())
+        {
+            task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
+            table_info_t& info = m_db_info[in_msg_.m_table_names];
+            info.tq = p;
+            info.ffcount.get_db().connect("sqlite://./test.db");
+            p->produce(task_binder_t::gen(&ffcount_t::save_event, &(it->second.ffcount), in_msg_));
+        }
+        else
+        {
+            it->second.tq->produce(task_binder_t::gen(&ffcount_t::save_event, &(it->second.ffcount), in_msg_));
+        }
+    }
+private:
+    int                         m_index;
+    table_info_map_t            m_db_info;
+    thread_t                    m_thread;
+    vector<task_queue_t*>       m_all_tq;
+};
+
+
 
 }
 
