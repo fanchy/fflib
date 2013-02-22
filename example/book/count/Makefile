@@ -15,9 +15,9 @@ ARCH=
 BIN=app_count
 
 #源文件目录
-SrcDir= .  ../../../fflib/db
+SrcDir= .  ../../../fflib/db ../../../fflib/base ../../../fflib/net ../../../fflib/rpc
 #头文件目录
-IncDir=  ../../../fflib/ 
+IncDir=  ../../../fflib/  ../../../fflib/ext 
 #连接库目录
 LibDir= /usr/local/lib
 SRCS=$(foreach dir,$(SrcDir),$(wildcard $(dir)/*.cpp))
