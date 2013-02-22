@@ -15,7 +15,13 @@ namespace ff {
 
 class msg_bus_t;
 class msg_bus_i;
-    
+ 
+struct callback_null_t
+{
+    static void callback(msg_tool_t& msg_){}
+};
+#define NULL_CB (&(callback_null_t::callback))
+
 class rpc_service_t
 {
     typedef map<uint32_t, callback_wrapper_i*>      callback_map_t;
@@ -27,6 +33,8 @@ public:
     uint16_t get_group_id() const;
     uint16_t get_id() const;
 
+    template<typename IN_MSG>
+    void async_call(IN_MSG& msg_) { async_call(msg_, NULL_CB); }
     void async_call(msg_i& msg_, uint16_t msg_id_, callback_wrapper_i* callback_);
     template<typename RET, typename MSGT, typename IN_MSG>
     void async_call(IN_MSG& msg_, RET (*callback_)(MSGT&));

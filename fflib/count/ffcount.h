@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <set>
 using namespace std;
 
 #include <string.h>
@@ -25,18 +26,18 @@ public:
     event_log_t():msg_i("event_log_t"){}
     event_log_t(const string& table_name_, const string& field_name_):
         msg_i("event_log_t"),
-        m_table_names(table_name_),
+        m_table_name(table_name_),
         m_field_names(field_name_)
     {
     }
     virtual ~event_log_t(){}
     virtual string encode()
     {
-        return (init_encoder()<< m_table_names << m_field_names << m_values).get_buff();
+        return (init_encoder()<< m_table_name << m_field_names << m_values).get_buff();
     }
     virtual void decode(const string& src_buff_)
     {
-        init_decoder(src_buff_) >> m_table_names >> m_field_names >> m_values;
+        init_decoder(src_buff_) >> m_table_name >> m_field_names >> m_values;
     }
     template<typename ARG1>
     void def(const ARG1& arg1_)
@@ -205,7 +206,7 @@ public:
     }
 
 public:
-    string              m_table_names;
+    string              m_table_name;
     string              m_field_names;
     vector<string>      m_values;
 };
@@ -230,20 +231,28 @@ class ffcount_t
 {
 public:
     ffcount_t()
-    {
-        get_db().connect("sqlite://./test.db");
-        if (get_db().exe_sql("CREATE TABLE  IF NOT EXISTS dumy (A int, B varchar(200))"))
-        {
-            printf("exe error:%s\n", get_db().error_msg());
-        }
-    }
+    {}
     virtual ~ffcount_t(){}
     int save_event(const event_log_t& event_log_)
     {
+        if (m_fields.empty())
+        {
+            init_fields(event_log_.m_table_name);
+        }
         char buff[1024];
-        int n = snprintf(buff, sizeof(buff), "INSERT INTO %s (", event_log_.m_table_names.c_str());
+        int n = snprintf(buff, sizeof(buff), "INSERT INTO %s (", event_log_.m_table_name.c_str());
         vector<string> str_vt;
         strtool_t::split(event_log_.m_field_names, str_vt, ",");
+        for (size_t i = 0; i < str_vt.size(); ++i)
+        {
+            if (m_fields.find(str_vt[i]) == m_fields.end())
+            {
+                //! 增加字段
+                m_fields.insert(str_vt[i]);
+                string sql = string("ALTER TABLE ") + event_log_.m_table_name + " ADD " + str_vt[i] +" varchar(255) default ''";
+                get_db().exe_sql(sql);
+            }
+        }
         for (size_t i = 0; i < str_vt.size(); ++i)
         {
             if (i == 0)
@@ -269,33 +278,54 @@ public:
         }
         n += snprintf(buff + n, sizeof(buff) - n, ")");
         //printf("buff=%s\n", buff);return 0;
-        return get_db().exe_sql(buff);
+        if (get_db().exe_sql(buff))
+        {
+            printf("exe sql failed[%s]\n", buff);
+            return -1;
+        }
+        return 0;
     }
 
-    void dump(vector<vector<string> >& ret_data)
+    void dump(vector<vector<string> >& ret_data, vector<string>& col_names_)
     {
+        for (size_t i = 0; i < col_names_.size(); ++i)
+        {
+            printf("    %s", col_names_[i].c_str());
+        }
+        printf("\n");
         for (size_t i = 0; i < ret_data.size(); ++i)
         {
-            printf("row[%u] begin======= ", i);
             for (size_t j = 0; j < ret_data[i].size(); ++j)
             {
                 printf(" %s", ret_data[i][j].c_str());
             }
-            printf(" =======row[%u] end\n", i);
+            printf("\n");
         }
         ret_data.clear();
     }
     int query(const string& sql_)
     {
         vector<vector<string> > ret_data;
-        int ret = get_db().exe_sql(sql_, ret_data);
-        dump(ret_data);
+        vector<string> col_names;
+        int ret = get_db().exe_sql(sql_, ret_data, col_names);
+        dump(ret_data, col_names);
         return ret;
     }
     ffdb_t& get_db() { return m_ffdb; } 
-
+    void init_fields(const string& table_)
+    {
+        string sql = string("select * from ") + table_ + " limit 1";
+        vector<vector<string> > ret_data;
+        vector<string> col_names;
+        get_db().exe_sql(sql, ret_data, col_names);
+        for (size_t i = 0; i < col_names.size(); ++i)
+        {
+            m_fields.insert(col_names[i]);
+        }
+    }
 protected:
-    ffdb_t     m_ffdb;
+    ffdb_t              m_ffdb;
+    set<string>         m_fields;
 };
 
 class ffcount_service_t
@@ -310,6 +340,7 @@ class ffcount_service_t
     typedef map<string, table_info_t> table_info_map_t;
 public:
     ffcount_service_t():
+        m_path("./"),
         m_index(0)
     {}
     int start(string config_ = "")
@@ -326,31 +357,54 @@ public:
         for (unsigned int i = 0; i < m_all_tq.size(); ++i)
         {
             m_all_tq[i]->close();
+        }
+        
+        m_thread.join();
+        for (unsigned int i = 0; i < m_all_tq.size(); ++i)
+        {
             delete m_all_tq[i];
         }
         m_all_tq.clear();
         return 0;
     }
 
-    void save_event(event_log_t& in_msg_, rpc_callcack_t<event_ret_t>& cb_)
+    int save_event(event_log_t& in_msg_, rpc_callcack_t<event_ret_t>& cb_)
     {
         event_ret_t ret;
         cb_(ret);
-        table_info_map_t::iterator it = m_db_info.find(in_msg_.m_table_names);
-        if (it == m_db_info.end())
+        table_info_t& info = m_db_info[in_msg_.m_table_name];
+        if (NULL == info.tq)
         {
             task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
-            table_info_t& info = m_db_info[in_msg_.m_table_names];
             info.tq = p;
-            info.ffcount.get_db().connect("sqlite://./test.db");
-            p->produce(task_binder_t::gen(&ffcount_t::save_event, &(it->second.ffcount), in_msg_));
+            time_t now   = ::time(NULL);
+            tm    tm_val = *::localtime(&now);
+            char buff[256];
+            snprintf(buff, sizeof(buff), "%s/%d/", m_path.c_str(), tm_val.tm_year + 1900);
+            ::mkdir(buff, 0777);
+            snprintf(buff, sizeof(buff), "%s/%d/%d", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1);
+            ::mkdir(buff, 0777);
+            snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, in_msg_.m_table_name.c_str());
+            if (info.ffcount.get_db().connect(buff))
+            {
+                printf("connect failed[%s]\n", buff);
+                return -1;
+            }
+            
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+                     in_msg_.m_table_name.c_str());
+            if (info.ffcount.get_db().exe_sql(buff))
+            {
+                printf("create table failed[%s]\n", buff);
+                return -1;
+            }
+            info.ffcount.query("select * from dumy");
         }
-        else
-        {
-            it->second.tq->produce(task_binder_t::gen(&ffcount_t::save_event, &(it->second.ffcount), in_msg_));
-        }
+        info.tq->produce(task_binder_t::gen(&ffcount_t::save_event, &(info.ffcount), in_msg_));
+        return 0;
     }
 private:
+    string                      m_path;
     int                         m_index;
     table_info_map_t            m_db_info;
     thread_t                    m_thread;

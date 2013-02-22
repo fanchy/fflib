@@ -37,10 +37,12 @@
 /*
 ** Make sure we can call this stuff from C++.
 */
+//! FF add
+#define SQLITE_THREADSAFE 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /*
 ** Add the ability to override 'extern'
