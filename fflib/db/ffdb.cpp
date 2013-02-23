@@ -85,3 +85,8 @@ void ffdb_t::dump(vector<vector<string> >& ret_data, vector<string>& col_names_)
     }
     ret_data.clear();
 }
+
+string ffdb_t::escape(const string& src_)
+{
+    return m_db_ops->escape(src_);
+}

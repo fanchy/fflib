@@ -25,6 +25,7 @@ public:
     virtual void close() = 0;
     virtual int  affect_rows() = 0;
     virtual const char*  error_msg() = 0;
+    virtual string escape(const string& src_) = 0;
 };
 
 }

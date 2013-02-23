@@ -290,15 +290,15 @@ public:
         {
             if (i == 0)
             {
-                n += snprintf(buff + n, sizeof(buff) - n, "'%s'", event_log_.m_values[i].c_str());
+                n += snprintf(buff + n, sizeof(buff) - n, "'%s'", get_db().escape(event_log_.m_values[i]).c_str());
             }
             else
             {
-                n += snprintf(buff + n, sizeof(buff) - n, ",'%s'", event_log_.m_values[i].c_str());
+                n += snprintf(buff + n, sizeof(buff) - n, ",'%s'", get_db().escape(event_log_.m_values[i]).c_str());
             }
         }
         n += snprintf(buff + n, sizeof(buff) - n, ")");
-        //printf("buff=%s\n", buff);return 0;
+        //printf("buff=%s\n", buff);
         if (get_db().exe_sql(buff))
         {
             printf("exe sql failed[%s]\n", buff);

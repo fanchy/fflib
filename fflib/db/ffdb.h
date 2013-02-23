@@ -51,6 +51,7 @@ public:
     ffdb_t();
     ~ffdb_t();
     
+    string escape(const string& src_);
     static void dump(vector<vector<string> >& ret_data, vector<string>& col_names_);
 
     int  connect(const string& args_);
