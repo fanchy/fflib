@@ -25,8 +25,8 @@ struct time_tool_t
     static long next_month()//!下个月开始时间戳
     {
         time_t now   = ::time(NULL);
-        tm    tm_val;// = *::localtime(&now);
-        ::localtime_s(&tm_val, &now);
+        tm    tm_val = *::localtime(&now);
+
         //! 计算这个月有多少天
         static int help_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
         int month_day_num = help_month[tm_val.tm_mon];

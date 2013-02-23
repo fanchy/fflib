@@ -23,7 +23,7 @@ public:
 
         if (arg.get_option_value("-l").empty())
         {
-            cerr <<"usage:-l arg need <app_broker -l tcp://127.0.0.1:10241>\n";
+            cerr <<"usage:-l arg need <app -l tcp://127.0.0.1:10241>\n";
             exit(-1);
         }
 

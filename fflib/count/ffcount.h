@@ -16,6 +16,7 @@ using namespace std;
 #include "net/codec.h"
 #include "base/task_queue_impl.h"
 #include "rpc/msg_bus.h"
+#include "base/time_tool.h"
 
 namespace ff
 {
@@ -210,23 +211,43 @@ public:
     string              m_field_names;
     vector<string>      m_values;
 };
-struct event_ret_t: public msg_i
+struct event_queryt_t
 {
-    event_ret_t():
-        msg_i("event_ret_t"),
-        value(true)
-    {}
-    virtual string encode()
+    struct in_t: public msg_i
     {
-        return (init_encoder() << value).get_buff();
-    }
-    virtual void decode(const string& src_buff_)
+        in_t():
+            msg_i("event_queryt_t::in_t")
+        {}
+        virtual string encode()
+        {
+            return (init_encoder() << str_time << m_table_name << sql).get_buff();
+        }
+        virtual void decode(const string& src_buff_)
+        {
+            init_decoder(src_buff_) >> str_time >> m_table_name >> sql;
+        }
+        string str_time;
+        string m_table_name;
+        string sql;
+    };
+    struct out_t: public msg_i
     {
-        init_decoder(src_buff_) >> value;
-    }
-    bool value;
+        out_t():
+            msg_i("event_queryt_t::out_t")
+        {}
+        virtual string encode()
+        {
+            return (init_encoder() << ret_data << col_names << err_msg).get_buff();
+        }
+        virtual void decode(const string& src_buff_)
+        {
+            init_decoder(src_buff_) >> ret_data >> col_names >> err_msg;
+        }
+        vector<vector<string> > ret_data;
+        vector<string>          col_names;
+        string                  err_msg;
+    };
 };
-
 class ffcount_t
 {
 public:
@@ -286,31 +307,6 @@ public:
         return 0;
     }
 
-    void dump(vector<vector<string> >& ret_data, vector<string>& col_names_)
-    {
-        for (size_t i = 0; i < col_names_.size(); ++i)
-        {
-            printf("    %s", col_names_[i].c_str());
-        }
-        printf("\n");
-        for (size_t i = 0; i < ret_data.size(); ++i)
-        {
-            for (size_t j = 0; j < ret_data[i].size(); ++j)
-            {
-                printf(" %s", ret_data[i][j].c_str());
-            }
-            printf("\n");
-        }
-        ret_data.clear();
-    }
-    int query(const string& sql_)
-    {
-        vector<vector<string> > ret_data;
-        vector<string> col_names;
-        int ret = get_db().exe_sql(sql_, ret_data, col_names);
-        dump(ret_data, col_names);
-        return ret;
-    }
     ffdb_t& get_db() { return m_ffdb; } 
     void init_fields(const string& table_)
     {
@@ -333,7 +329,9 @@ class ffcount_service_t
     struct table_info_t
     {
         table_info_t():
+            need_create_table(true),
             tq(NULL){}
+        bool             need_create_table;
         task_queue_t*    tq;
         ffcount_t        ffcount;
     };
@@ -345,11 +343,16 @@ public:
     {}
     int start(string config_ = "")
     {
+        if (false == config_.empty()) m_path = config_;
+        
         for (int i = 0; i < 8; ++i)
         {
             m_all_tq.push_back(new task_queue_t());
             m_thread.create_thread(task_binder_t::gen(&task_queue_t::run, m_all_tq[i]), 1);
         }
+        
+        long dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
+        m_timer_service.once_timer(dest_tm*1000, task_binder_t::gen(&ffcount_service_t::create_new_dir, this));
         return 0;
     }
     int stop()
@@ -368,15 +371,19 @@ public:
         return 0;
     }
 
-    int save_event(event_log_t& in_msg_, rpc_callcack_t<event_ret_t>& cb_)
+    int save_event(event_log_t& in_msg_, rpc_callcack_t<bool_ret_msg_t>& cb_)
     {
-        event_ret_t ret;
+        bool_ret_msg_t ret;ret.value = true;
         cb_(ret);
+        lock_guard_t lock(m_mutex);
         table_info_t& info = m_db_info[in_msg_.m_table_name];
-        if (NULL == info.tq)
+        if (true == info.need_create_table)
         {
-            task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
-            info.tq = p;
+            if (NULL == info.tq)
+            {
+                task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
+                info.tq = p;
+            }
             time_t now   = ::time(NULL);
             tm    tm_val = *::localtime(&now);
             char buff[256];
@@ -385,6 +392,7 @@ public:
             snprintf(buff, sizeof(buff), "%s/%d/%d", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1);
             ::mkdir(buff, 0777);
             snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, in_msg_.m_table_name.c_str());
+            printf("connect new db<%s>\n", buff);
             if (info.ffcount.get_db().connect(buff))
             {
                 printf("connect failed[%s]\n", buff);
@@ -398,10 +406,75 @@ public:
                 printf("create table failed[%s]\n", buff);
                 return -1;
             }
-            info.ffcount.query("select * from dumy");
+            info.need_create_table = false;
+            printf("sql<%s>\n", buff);
         }
         info.tq->produce(task_binder_t::gen(&ffcount_t::save_event, &(info.ffcount), in_msg_));
         return 0;
+    }
+    int query(event_queryt_t::in_t& in_msg_, rpc_callcack_t<event_queryt_t::out_t>& cb_)
+    {
+        lock_guard_t lock(m_mutex);
+        table_info_t& info = m_db_info[in_msg_.m_table_name];
+        if (NULL == info.tq)
+        {
+            event_queryt_t::out_t ret;
+            cb_(ret);
+            return -1;
+        }
+        info.tq->produce(task_binder_t::gen(&ffcount_service_t::query_impl, this, in_msg_, cb_, &(info.ffcount)));
+        return 0;
+    }
+    int query_impl(event_queryt_t::in_t in_msg_, rpc_callcack_t<event_queryt_t::out_t> cb_, ffcount_t* ffcount_)
+    {
+        event_queryt_t::out_t ret;
+        char buff[256];
+        time_t now   = ::time(NULL);
+        tm    tm_val = *::localtime(&now);
+        snprintf(buff, sizeof(buff), "%d/%d", tm_val.tm_year + 1900, tm_val.tm_mon+1);
+        if (in_msg_.str_time.empty() || in_msg_.str_time == buff)
+        {
+            if (ffcount_->get_db().exe_sql(in_msg_.sql, ret.ret_data, ret.col_names))
+            {
+                ret.err_msg = ffcount_->get_db().error_msg();
+            }
+            cb_(ret);
+            return 0;
+        }
+        else
+        {
+            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), in_msg_.str_time.c_str(), in_msg_.m_table_name.c_str());
+            ffdb_t ffdb;
+            if (ffdb.connect(buff))
+            {
+                ret.err_msg = ffcount_->get_db().error_msg();
+                cb_(ret);
+                return -1;
+            }
+            if (ffdb.exe_sql(in_msg_.sql, ret.ret_data, ret.col_names))
+            {
+                ret.err_msg = ffcount_->get_db().error_msg();
+            }
+            cb_(ret);
+            return 0;
+        }
+        
+        return 0;
+    }
+    void create_new_dir()
+    {
+        long dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
+        m_timer_service.once_timer(dest_tm*1000, task_binder_t::gen(&ffcount_service_t::create_new_dir, this));
+        lock_guard_t lock(m_mutex);
+        for (table_info_map_t::iterator it = m_db_info.begin(); it != m_db_info.end(); ++it)
+        {
+            if (it->second.tq)
+                it->second.tq->produce(task_binder_t::gen(&ffcount_service_t::clear_ops, this, &(it->second)));
+        }
+    }
+    void clear_ops(table_info_t* table_info_)
+    {
+        table_info_->need_create_table = true; //! 下次会自动创建新table
     }
 private:
     string                      m_path;
@@ -409,7 +482,10 @@ private:
     table_info_map_t            m_db_info;
     thread_t                    m_thread;
     vector<task_queue_t*>       m_all_tq;
+    mutex_t                     m_mutex;
+    timer_service_t             m_timer_service;
 };
+
 
 
 
