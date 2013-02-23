@@ -3,6 +3,7 @@
 
 #include "net/acceptor_impl.h"
 #include "net/gateway_acceptor.h"
+#include "net/http_acceptor.h"
 #include "net/epoll_impl.h"
 #include "connector.h"
 #include "base/singleton.h"
@@ -94,7 +95,20 @@ public:
         }
         return ret;
     }
-
+    static acceptor_i* http_listen(const string& host_, msg_handler_i* msg_handler_)
+    {
+        singleton_t<global_data_t>::instance().start();
+        acceptor_impl_t* ret = new http_acceptor_t(&(singleton_t<global_data_t>::instance().epoll),
+                                                   msg_handler_, 
+                                                   (singleton_t<global_data_t>::instance().tg));
+        
+        if (ret->open(host_))
+        {
+            delete ret;
+            return NULL;
+        }
+        return ret;
+    }
     static socket_ptr_t connect(const string& host_, msg_handler_i* msg_handler_)
     {
         singleton_t<global_data_t>::instance().start();

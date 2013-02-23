@@ -2,6 +2,7 @@
 #include "net/socket_i.h"
 #include "base/strtool.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -171,11 +172,12 @@ int text_socket_controller_impl_t::parse_http_protocol(socket_i* sp_, char* buff
 
         m_head.append(buff_begin, pos - buff);
         vector<string> vt;
+        
         strtool::split(m_head, vt, " ");
-            
+
         if (vt.size() > 1)
         {
-            m_message.append_msg((char*)vt[1].c_str(), vt[1].size());
+            m_message.append_to_body(vt[1].c_str(), vt[1].size());
         }
 
         m_head_end_flag = true;

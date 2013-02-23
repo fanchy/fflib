@@ -17,6 +17,17 @@ using namespace std;
 #include "base/task_queue_impl.h"
 #include "rpc/msg_bus.h"
 #include "base/time_tool.h"
+#include "net/msg_handler_i.h"
+
+
+#include "rapidjson/document.h"     // rapidjson's DOM-style API                                                                                             
+#include "rapidjson/prettywriter.h" // for stringify JSON
+#include "rapidjson/filestream.h"   // wrapper of C stream for prettywriter as output
+#include "rapidjson/stringbuffer.h"
+
+typedef runtime_error       msg_exception_t;
+typedef rapidjson::Document json_dom_t;
+typedef rapidjson::Value    json_value_t;
 
 namespace ff
 {
@@ -324,7 +335,7 @@ protected:
     set<string>         m_fields;
 };
 
-class ffcount_service_t
+class ffcount_service_t: public msg_handler_i
 {
     struct table_info_t
     {
@@ -371,6 +382,19 @@ public:
         return 0;
     }
 
+    int connect_db(ffdb_t& ffdb, const string& table_name)
+    {
+        time_t now   = ::time(NULL);
+        tm    tm_val = *::localtime(&now);
+        char buff[256];
+        snprintf(buff, sizeof(buff), "%s/%d/", m_path.c_str(), tm_val.tm_year + 1900);
+        ::mkdir(buff, 0777);
+        snprintf(buff, sizeof(buff), "%s/%d/%d", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1);
+        ::mkdir(buff, 0777);
+        snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, table_name.c_str());
+        printf("connect new db<%s>\n", buff);
+        return ffdb.connect(buff);
+    }
     int save_event(event_log_t& in_msg_, rpc_callcack_t<bool_ret_msg_t>& cb_)
     {
         bool_ret_msg_t ret;ret.value = true;
@@ -384,21 +408,13 @@ public:
                 task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
                 info.tq = p;
             }
-            time_t now   = ::time(NULL);
-            tm    tm_val = *::localtime(&now);
-            char buff[256];
-            snprintf(buff, sizeof(buff), "%s/%d/", m_path.c_str(), tm_val.tm_year + 1900);
-            ::mkdir(buff, 0777);
-            snprintf(buff, sizeof(buff), "%s/%d/%d", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1);
-            ::mkdir(buff, 0777);
-            snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, in_msg_.m_table_name.c_str());
-            printf("connect new db<%s>\n", buff);
-            if (info.ffcount.get_db().connect(buff))
+            
+            if (connect_db(info.ffcount.get_db(), in_msg_.m_table_name))
             {
-                printf("connect failed[%s]\n", buff);
+                printf("connect failed\n");
                 return -1;
             }
-            
+            char buff[256];
             snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
                      in_msg_.m_table_name.c_str());
             if (info.ffcount.get_db().exe_sql(buff))
@@ -416,11 +432,29 @@ public:
     {
         lock_guard_t lock(m_mutex);
         table_info_t& info = m_db_info[in_msg_.table_name];
-        if (NULL == info.tq)
+        if (true == info.need_create_table)
         {
-            event_queryt_t::out_t ret;
-            cb_(ret);
-            return -1;
+            if (NULL == info.tq)
+            {
+                task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
+                info.tq = p;
+            }
+            
+            if (connect_db(info.ffcount.get_db(), in_msg_.table_name))
+            {
+                printf("connect failed\n");
+                return -1;
+            }
+            char buff[256];
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+                     in_msg_.table_name.c_str());
+            if (info.ffcount.get_db().exe_sql(buff))
+            {
+                printf("create table failed[%s]\n", buff);
+                return -1;
+            }
+            info.need_create_table = false;
+            printf("sql<%s>\n", buff);
         }
         info.tq->produce(task_binder_t::gen(&ffcount_service_t::query_impl, this, in_msg_, cb_, &(info.ffcount)));
         return 0;
@@ -475,6 +509,136 @@ public:
     void clear_ops(table_info_t* table_info_)
     {
         table_info_->need_create_table = true; //! 下次会自动创建新table
+    }
+    
+    virtual int handle_broken(socket_ptr_t sock_)
+    {
+        lock_guard_t lock(m_mutex);
+        sock_->safe_delete();
+        return 0;
+    }
+    virtual int handle_msg(const message_t& msg_, socket_ptr_t sock_)
+    {
+        string arg = msg_.get_body();
+        
+        arg = strtool_t::replace(arg, "%20", " ");
+        arg = strtool_t::replace(arg, "%2B", "+");
+        arg = strtool_t::replace(arg, "%2F", "/");
+        arg = strtool_t::replace(arg, "%3F", "?");
+        arg = strtool_t::replace(arg, "%25", "%");
+        arg = strtool_t::replace(arg, "%23", "#");
+        arg = strtool_t::replace(arg, "%26", "&");
+        arg = strtool_t::replace(arg, "%3D", "=");
+        //printf("XXX!!!1111 [%s],ret=[%s]\n", msg_.get_body().c_str(), arg.c_str());
+        
+        vector<string> parse_ret;
+        strtool_t::split(arg, parse_ret, "/");
+        if (parse_ret.size() != 4)
+        {
+            sock_->async_send("/time/table_name/sql format needed");return 0;
+        }
+        string str_time = parse_ret[0] + "/" + parse_ret[1];
+        string table_name = parse_ret[2];
+        string sql = parse_ret[3];
+        
+        lock_guard_t lock(m_mutex);
+        table_info_t& info = m_db_info[table_name];
+        if (true == info.need_create_table)
+        {
+            if (NULL == info.tq)
+            {
+                task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
+                info.tq = p;
+            }
+            
+            if (connect_db(info.ffcount.get_db(), table_name))
+            {
+                printf("connect failed\n");
+                return -1;
+            }
+            char buff[256];
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+                     table_name.c_str());
+            if (info.ffcount.get_db().exe_sql(buff))
+            {
+                printf("create table failed[%s]\n", buff);
+                return -1;
+            }
+            info.need_create_table = false;
+            printf("sql<%s>\n", buff);
+        }
+        info.tq->produce(task_binder_t::gen(&ffcount_service_t::http_query_impl, this, &(info.ffcount), sock_, str_time, table_name, sql));
+        
+        return 0;
+    }
+    int http_query_impl(ffcount_t* ffcount_, socket_ptr_t sock_, string str_time, string table_name, string sql)
+    {
+        char buff[256];
+        string err_msg;
+        vector<vector<string> > ret_data;
+        vector<string> col_names;
+        time_t now   = ::time(NULL);
+        tm    tm_val = *::localtime(&now);
+        snprintf(buff, sizeof(buff), "%d/%d", tm_val.tm_year + 1900, tm_val.tm_mon+1);
+        if (str_time.empty() || str_time == buff)
+        {
+            if (ffcount_->get_db().exe_sql(sql, ret_data, col_names))
+            {
+                err_msg = ffcount_->get_db().error_msg();
+            }
+        }
+        else
+        {
+            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), str_time.c_str(), table_name.c_str());
+            ffdb_t ffdb;
+            if (ffdb.connect(buff))
+            {
+                err_msg = ffcount_->get_db().error_msg();
+            }
+            else
+            {
+                if (ffdb.exe_sql(sql, ret_data, col_names))
+                {
+                    err_msg = ffcount_->get_db().error_msg();
+                }
+            }
+        }
+        rapidjson::Document::AllocatorType allocator;
+        rapidjson::StringBuffer            str_buff;
+        json_value_t                       ret_json(rapidjson::kObjectType);
+        
+        {
+            json_value_t tmp_val(err_msg.c_str(), err_msg.length(), allocator);
+            ret_json.AddMember("err_msg", tmp_val, allocator);
+        }
+        {
+            json_value_t tmp_val(rapidjson::kArrayType);
+            for (size_t i = 0; i < col_names.size(); ++i)
+            {
+                json_value_t v(col_names[i].c_str(), col_names[i].length(), allocator);
+                tmp_val.PushBack(v, allocator);
+            }
+            ret_json.AddMember("col_names", tmp_val, allocator);
+        }
+        {
+            json_value_t data_array(rapidjson::kArrayType);
+            for (size_t i = 0; i < ret_data.size(); ++i)
+            {
+                json_value_t tmp_val(rapidjson::kArrayType);
+                for (size_t j = 0; j < ret_data[i].size(); ++j)
+                {
+                    json_value_t v(ret_data[i][j].c_str(), ret_data[i][j].length(), allocator);
+                    tmp_val.PushBack(v, allocator);
+                }
+                data_array.PushBack(tmp_val, allocator);
+            }
+            ret_json.AddMember("ret_data", data_array, allocator);
+        }
+        rapidjson::Writer<rapidjson::StringBuffer> writer(str_buff, &allocator);
+        ret_json.Accept(writer);
+        string output(str_buff.GetString(), str_buff.GetSize());
+        sock_->async_send(output);
+        return 0;
     }
 private:
     string                      m_path;

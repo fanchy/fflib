@@ -56,7 +56,10 @@ public:
         ::memset(&m_head, 0, sizeof(m_head));
         m_body.clear();
     }
-
+    void append_to_body(const char* buff, size_t len)
+    {
+        m_body.append(buff, len);
+    }
     //! for parse
     bool have_recv_head(size_t have_recv_size_) { return have_recv_size_ >= sizeof(message_head_t);}
 private:
