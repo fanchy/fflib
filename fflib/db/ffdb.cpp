@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include "db/ffdb.h"
 #include "db/sqlite_ops.h"
 #include "base/strtool.h"
@@ -65,4 +66,22 @@ int  ffdb_t::exe_sql(const string& sql_, vector<vector<string> >& ret_data_, vec
 {
     each_row_common_cb_t cb(&ret_data_, &col_names_);
     return m_db_ops->exe_sql(sql_, &cb);
+}
+
+void ffdb_t::dump(vector<vector<string> >& ret_data, vector<string>& col_names_)
+{
+    for (size_t i = 0; i < col_names_.size(); ++i)
+    {
+        printf("    %s", col_names_[i].c_str());
+    }
+    printf("\n");
+    for (size_t i = 0; i < ret_data.size(); ++i)
+    {
+        for (size_t j = 0; j < ret_data[i].size(); ++j)
+        {
+            printf(" %s", ret_data[i][j].c_str());
+        }
+        printf("\n");
+    }
+    ret_data.clear();
 }

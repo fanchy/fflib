@@ -51,23 +51,7 @@ public:
     ffdb_t();
     ~ffdb_t();
     
-    static void dump(vector<vector<string> >& ret_data, vector<string>& col_names_)
-    {
-        for (size_t i = 0; i < col_names_.size(); ++i)
-        {
-            printf("    %s", col_names_[i].c_str());
-        }
-        printf("\n");
-        for (size_t i = 0; i < ret_data.size(); ++i)
-        {
-            for (size_t j = 0; j < ret_data[i].size(); ++j)
-            {
-                printf(" %s", ret_data[i][j].c_str());
-            }
-            printf("\n");
-        }
-        ret_data.clear();
-    }
+    static void dump(vector<vector<string> >& ret_data, vector<string>& col_names_);
 
     int  connect(const string& args_);
     bool is_connected();

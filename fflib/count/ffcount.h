@@ -220,14 +220,14 @@ struct event_queryt_t
         {}
         virtual string encode()
         {
-            return (init_encoder() << str_time << m_table_name << sql).get_buff();
+            return (init_encoder() << str_time << table_name << sql).get_buff();
         }
         virtual void decode(const string& src_buff_)
         {
-            init_decoder(src_buff_) >> str_time >> m_table_name >> sql;
+            init_decoder(src_buff_) >> str_time >> table_name >> sql;
         }
         string str_time;
-        string m_table_name;
+        string table_name;
         string sql;
     };
     struct out_t: public msg_i
@@ -415,7 +415,7 @@ public:
     int query(event_queryt_t::in_t& in_msg_, rpc_callcack_t<event_queryt_t::out_t>& cb_)
     {
         lock_guard_t lock(m_mutex);
-        table_info_t& info = m_db_info[in_msg_.m_table_name];
+        table_info_t& info = m_db_info[in_msg_.table_name];
         if (NULL == info.tq)
         {
             event_queryt_t::out_t ret;
@@ -443,7 +443,7 @@ public:
         }
         else
         {
-            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), in_msg_.str_time.c_str(), in_msg_.m_table_name.c_str());
+            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), in_msg_.str_time.c_str(), in_msg_.table_name.c_str());
             ffdb_t ffdb;
             if (ffdb.connect(buff))
             {
