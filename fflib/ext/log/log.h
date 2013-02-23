@@ -25,9 +25,9 @@ static int log_impl(const char* mod, const char* fmt, ...)
 #define FF      "FF"
 #define MSG_BUS "MSG_BUS"
 
-#define logdebug(content) printf("\033[1;33mDEBUG "); log_t::log_impl content ; printf("\033[0m\n")
-#define logtrace(content) printf("TRACE "); log_t::log_impl content ; printf("\n")
-#define loginfo(content) printf("\033[1;32mINFO  "); log_t::log_impl content ; printf("\033[0m\n")
+#define logdebug(content) {}//printf("\033[1;33mDEBUG "); log_t::log_impl content ; printf("\033[0m\n")
+#define logtrace(content) {}//printf("TRACE "); log_t::log_impl content ; printf("\n")
+#define loginfo(content) {}//printf("\033[1;32mINFO  "); log_t::log_impl content ; printf("\033[0m\n")
 #define logwarn(content) printf("\033[1;34mWARN  "); log_t::log_impl content ; printf("\033[0m\n")
 #define logerror(content) printf("\033[0;31mERROR "); log_t::log_impl content ; printf("\033[0m\n")
 #define logfatal(content) printf("\033[0;35mFATAL "); log_t::log_impl content ; printf("\033[0m")
