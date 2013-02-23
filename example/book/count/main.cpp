@@ -27,6 +27,12 @@ int main(int argc, char* argv[])
             .reg(&ffcount_service_t::save_event)
             .reg(&ffcount_service_t::query);
     
+    acceptor_i* p_http = NULL;
+    if (arg_helper.is_enable_option("-http"))
+    {
+        p_http = net_factory_t::http_listen(arg_helper.get_option_value("-http"), &ffcount_service);
+    }
+    
     signal_helper_t::wait();
     singleton_t<msg_bus_t>::instance().close();
     ffcount_service.stop();
