@@ -35,9 +35,17 @@ namespace ff
 class event_log_t : public msg_i
 {
 public:
-    event_log_t():msg_i("event_log_t"){}
+    event_log_t():msg_i("event_log_t"),m_db_name("default"){}
     event_log_t(const string& table_name_, const string& field_name_):
         msg_i("event_log_t"),
+        m_db_name("default"),
+        m_table_name(table_name_),
+        m_field_names(field_name_)
+    {
+    }
+    event_log_t(const string& db_name_, const string& table_name_, const string& field_name_):
+        msg_i("event_log_t"),
+        m_db_name(db_name_),
         m_table_name(table_name_),
         m_field_names(field_name_)
     {
@@ -45,11 +53,11 @@ public:
     virtual ~event_log_t(){}
     virtual string encode()
     {
-        return (init_encoder()<< m_table_name << m_field_names << m_values).get_buff();
+        return (init_encoder()<< m_db_name << m_table_name << m_field_names << m_values).get_buff();
     }
     virtual void decode(const string& src_buff_)
     {
-        init_decoder(src_buff_) >> m_table_name >> m_field_names >> m_values;
+        init_decoder(src_buff_) >> m_db_name >> m_table_name >> m_field_names >> m_values;
     }
     template<typename ARG1>
     void def(const ARG1& arg1_)
@@ -379,6 +387,7 @@ public:
         }
     }
 public:
+    string              m_db_name;
     string              m_table_name;
     string              m_field_names;
     vector<string>      m_values;
@@ -388,18 +397,19 @@ struct event_queryt_t
     struct in_t: public msg_i
     {
         in_t():
-            msg_i("event_queryt_t::in_t")
+            msg_i("event_queryt_t::in_t"),
+            db_name("default")
         {}
         virtual string encode()
         {
-            return (init_encoder() << str_time << table_name << sql).get_buff();
+            return (init_encoder() << str_time << db_name << sql).get_buff();
         }
         virtual void decode(const string& src_buff_)
         {
-            init_decoder(src_buff_) >> str_time >> table_name >> sql;
+            init_decoder(src_buff_) >> str_time >> db_name >> sql;
         }
         string str_time;
-        string table_name;
+        string db_name;
         string sql;
     };
     struct out_t: public msg_i
@@ -428,6 +438,7 @@ public:
     virtual ~ffcount_t(){}
     int save_event(const event_log_t& event_log_)
     {
+        set<string>& m_fields = m_table2fields[event_log_.m_table_name];
         if (m_fields.empty())
         {
             init_fields(event_log_.m_table_name);
@@ -482,6 +493,7 @@ public:
     ffdb_t& get_db() { return m_ffdb; } 
     void init_fields(const string& table_)
     {
+        set<string>& m_fields = m_table2fields[table_];
         string sql = string("select * from ") + table_ + " limit 1";
         vector<vector<string> > ret_data;
         vector<string> col_names;
@@ -492,8 +504,8 @@ public:
         }
     }
 protected:
-    ffdb_t              m_ffdb;
-    set<string>         m_fields;
+    ffdb_t                              m_ffdb;
+    map<string, set<string> >           m_table2fields;
 };
 
 class ffcount_service_t: public msg_handler_i
@@ -501,11 +513,12 @@ class ffcount_service_t: public msg_handler_i
     struct table_info_t
     {
         table_info_t():
-            need_create_table(true),
+            need_create_flag(true),
             tq(NULL){}
-        bool             need_create_table;
+        bool             need_create_flag;
         task_queue_t*    tq;
         ffcount_t        ffcount;
+        set<string>      table_names;
     };
     typedef map<string, table_info_t> table_info_map_t;
 public:
@@ -543,8 +556,9 @@ public:
         return 0;
     }
 
-    int connect_db(ffdb_t& ffdb, const string& table_name)
+    int connect_db(ffcount_t& ffcount, const string& db_name)
     {
+        ffdb_t& ffdb = ffcount.get_db();
         time_t now   = ::time(NULL);
         tm    tm_val = *::localtime(&now);
         char buff[256];
@@ -552,17 +566,13 @@ public:
         ::mkdir(buff, 0777);
         snprintf(buff, sizeof(buff), "%s/%d/%d", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1);
         ::mkdir(buff, 0777);
-        snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, table_name.c_str());
+        snprintf(buff, sizeof(buff), "sqlite://%s/%d/%d/%s.db", m_path.c_str(), tm_val.tm_year + 1900, tm_val.tm_mon+1, db_name.c_str());
         printf("connect new db<%s>\n", buff);
         return ffdb.connect(buff);
     }
-    int save_event(event_log_t& in_msg_, rpc_callcack_t<bool_ret_msg_t>& cb_)
+    int check_db_valid(table_info_t& info, const string& db_name, const string& table_name)
     {
-        bool_ret_msg_t ret;ret.value = true;
-        cb_(ret);
-        lock_guard_t lock(m_mutex);
-        table_info_t& info = m_db_info[in_msg_.m_table_name];
-        if (true == info.need_create_table)
+        if (true == info.need_create_flag)
         {
             if (NULL == info.tq)
             {
@@ -570,21 +580,38 @@ public:
                 info.tq = p;
             }
             
-            if (connect_db(info.ffcount.get_db(), in_msg_.m_table_name))
+            if (connect_db(info.ffcount, db_name))
             {
                 printf("connect failed\n");
                 return -1;
             }
-            char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
-                     in_msg_.m_table_name.c_str());
-            if (info.ffcount.get_db().exe_sql(buff))
-            {
-                printf("create table failed[%s]\n", buff);
-                return -1;
-            }
-            info.need_create_table = false;
-            printf("sql<%s>\n", buff);
+            info.need_create_flag = false;            
+        }
+        if (table_name.empty() || info.table_names.find(table_name) != info.table_names.end())
+        {
+            return 0;
+        }
+        char buff[256];
+        snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+                 table_name.c_str());
+        if (info.ffcount.get_db().exe_sql(buff))
+        {
+            printf("create table failed[%s]\n", buff);
+            return -1;
+        }
+        printf("sql<%s>\n", buff);
+        info.table_names.insert(table_name);
+        return 0;
+    }
+    int save_event(event_log_t& in_msg_, rpc_callcack_t<bool_ret_msg_t>& cb_)
+    {
+        bool_ret_msg_t ret;ret.value = true;
+        cb_(ret);
+        lock_guard_t lock(m_mutex);
+        table_info_t& info = m_db_info[in_msg_.m_db_name];
+        if (check_db_valid(info, in_msg_.m_db_name, in_msg_.m_table_name))
+        {
+            return -1;
         }
         info.tq->produce(task_binder_t::gen(&ffcount_t::save_event, &(info.ffcount), in_msg_));
         return 0;
@@ -592,30 +619,12 @@ public:
     int query(event_queryt_t::in_t& in_msg_, rpc_callcack_t<event_queryt_t::out_t>& cb_)
     {
         lock_guard_t lock(m_mutex);
-        table_info_t& info = m_db_info[in_msg_.table_name];
-        if (true == info.need_create_table)
+        table_info_t& info = m_db_info[in_msg_.db_name];
+        if (check_db_valid(info, in_msg_.db_name, ""))
         {
-            if (NULL == info.tq)
-            {
-                task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
-                info.tq = p;
-            }
-            
-            if (connect_db(info.ffcount.get_db(), in_msg_.table_name))
-            {
-                printf("connect failed\n");
-                return -1;
-            }
-            char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
-                     in_msg_.table_name.c_str());
-            if (info.ffcount.get_db().exe_sql(buff))
-            {
-                printf("create table failed[%s]\n", buff);
-                return -1;
-            }
-            info.need_create_table = false;
-            printf("sql<%s>\n", buff);
+            event_queryt_t::out_t ret;
+            cb_(ret);
+            return -1;
         }
         info.tq->produce(task_binder_t::gen(&ffcount_service_t::query_impl, this, in_msg_, cb_, &(info.ffcount)));
         return 0;
@@ -638,7 +647,7 @@ public:
         }
         else
         {
-            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), in_msg_.str_time.c_str(), in_msg_.table_name.c_str());
+            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), in_msg_.str_time.c_str(), in_msg_.db_name.c_str());
             ffdb_t ffdb;
             if (ffdb.connect(buff))
             {
@@ -669,7 +678,7 @@ public:
     }
     void clear_ops(table_info_t* table_info_)
     {
-        table_info_->need_create_table = true; //! 下次会自动创建新table
+        table_info_->need_create_flag = true; //! 下次会自动创建新table
     }
     
     virtual int handle_broken(socket_ptr_t sock_)
@@ -698,45 +707,25 @@ public:
         strtool_t::split(arg, parse_ret, "/");
         if (parse_ret.size() != 4)
         {
-            sock_->async_send("/time/table_name/sql format needed");return 0;
+            sock_->async_send("/time/db_name/sql format needed");return 0;
         }
         string str_time = parse_ret[0] + "/" + parse_ret[1];
-        string table_name = parse_ret[2];
+        string db_name = parse_ret[2];
         string sql = parse_ret[3];
         
         lock_guard_t lock(m_mutex);
-        table_info_t& info = m_db_info[table_name];
-        if (true == info.need_create_table)
+        table_info_t& info = m_db_info[db_name];
+        if (check_db_valid(info, db_name, ""))
         {
-            if (NULL == info.tq)
-            {
-                task_queue_t* p    = m_all_tq[m_index++ % m_all_tq.size()];
-                info.tq = p;
-            }
-            
-            if (connect_db(info.ffcount.get_db(), table_name))
-            {
-                printf("connect failed\n");
-                return -1;
-            }
-            char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
-                     table_name.c_str());
-            if (info.ffcount.get_db().exe_sql(buff))
-            {
-                printf("create table failed[%s]\n", buff);
-                return -1;
-            }
-            info.need_create_table = false;
-            printf("sql<%s>\n", buff);
+            sock_->async_send("db connect failed");return 0;
         }
         //! 记录该socket有效，由于是异步操作，有可能在此期间变成失效
         m_tmp_socket_cache.insert(sock_);
-        info.tq->produce(task_binder_t::gen(&ffcount_service_t::http_query_impl, this, &(info.ffcount), sock_, str_time, table_name, sql));
+        info.tq->produce(task_binder_t::gen(&ffcount_service_t::http_query_impl, this, &(info.ffcount), sock_, str_time, db_name, sql));
         
         return 0;
     }
-    int http_query_impl(ffcount_t* ffcount_, socket_ptr_t sock_, string str_time, string table_name, string sql)
+    int http_query_impl(ffcount_t* ffcount_, socket_ptr_t sock_, string str_time, string db_name, string sql)
     {
         char buff[256];
         string err_msg;
@@ -754,7 +743,7 @@ public:
         }
         else
         {
-            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), str_time.c_str(), table_name.c_str());
+            snprintf(buff, sizeof(buff), "sqlite://%s/%s/%s.db", m_path.c_str(), str_time.c_str(), db_name.c_str());
             ffdb_t ffdb;
             if (ffdb.connect(buff))
             {
