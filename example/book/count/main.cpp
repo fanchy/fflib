@@ -9,6 +9,11 @@ using namespace ff;
 
 int main(int argc, char* argv[])
 {
+    if (argc == 1)
+    {
+        printf("usage: app -l tcp://127.0.0.1:10241 -http tcp://127.0.0.1:8080\n");
+        return 1;
+    }
     arg_helper_t arg_helper(argc, argv);
     broker_application_t::run(argc, argv);
 
