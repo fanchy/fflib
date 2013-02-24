@@ -216,7 +216,168 @@ public:
             ss.clear();ret.clear();
         }
     }
-
+    template<typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7>
+    void def(const ARG1& arg1_, const ARG2& arg2_, const ARG3& arg3_, const ARG4& arg4_, const ARG5& arg5_, const ARG6& arg6_, const ARG7& arg7_)
+    {
+        stringstream ss;
+        string ret;
+        {
+            ss << arg1_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg2_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg3_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg4_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg5_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg6_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg7_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+    }
+    template<typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8>
+    void def(const ARG1& arg1_, const ARG2& arg2_, const ARG3& arg3_, const ARG4& arg4_, const ARG5& arg5_, const ARG6& arg6_, const ARG7& arg7_, const ARG8& arg8_)
+    {
+        stringstream ss;
+        string ret;
+        {
+            ss << arg1_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg2_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg3_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg4_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg5_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg6_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg7_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg8_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+    }
+    template<typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8, typename ARG9>
+    void def(const ARG1& arg1_, const ARG2& arg2_, const ARG3& arg3_, const ARG4& arg4_, const ARG5& arg5_, const ARG6& arg6_, const ARG7& arg7_, const ARG8& arg8_, const ARG9& arg9_)
+    {
+        stringstream ss;
+        string ret;
+        {
+            ss << arg1_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg2_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg3_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg4_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg5_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg6_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg7_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg8_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+        {
+            ss << arg9_;
+            ss >> ret;
+            m_values.push_back(ret);
+            ss.clear();ret.clear();
+        }
+    }
 public:
     string              m_table_name;
     string              m_field_names;
