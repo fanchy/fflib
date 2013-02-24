@@ -415,7 +415,7 @@ public:
                 return -1;
             }
             char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
                      in_msg_.m_table_name.c_str());
             if (info.ffcount.get_db().exe_sql(buff))
             {
@@ -446,7 +446,7 @@ public:
                 return -1;
             }
             char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
                      in_msg_.table_name.c_str());
             if (info.ffcount.get_db().exe_sql(buff))
             {
@@ -515,6 +515,7 @@ public:
     {
         lock_guard_t lock(m_mutex);
         sock_->safe_delete();
+        m_tmp_socket_cache.erase(sock_);
         return 0;
     }
     virtual int handle_msg(const message_t& msg_, socket_ptr_t sock_)
@@ -522,6 +523,7 @@ public:
         string arg = msg_.get_body();
         
         arg = strtool_t::replace(arg, "%20", " ");
+        arg = strtool_t::replace(arg, "%2A", "*");
         arg = strtool_t::replace(arg, "%2B", "+");
         arg = strtool_t::replace(arg, "%2F", "/");
         arg = strtool_t::replace(arg, "%3F", "?");
@@ -529,7 +531,7 @@ public:
         arg = strtool_t::replace(arg, "%23", "#");
         arg = strtool_t::replace(arg, "%26", "&");
         arg = strtool_t::replace(arg, "%3D", "=");
-        //printf("XXX!!!1111 [%s],ret=[%s]\n", msg_.get_body().c_str(), arg.c_str());
+        printf("http query param<%s>, convert to<%s>\n", msg_.get_body().c_str(), arg.c_str());
         
         vector<string> parse_ret;
         strtool_t::split(arg, parse_ret, "/");
@@ -557,7 +559,7 @@ public:
                 return -1;
             }
             char buff[256];
-            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(auto_id integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
+            snprintf(buff, sizeof(buff), "create table IF NOT EXISTS %s(autoid integer PRIMARY KEY autoincrement, logtime TIMESTAMP default (datetime('now', 'localtime')))",
                      table_name.c_str());
             if (info.ffcount.get_db().exe_sql(buff))
             {
@@ -567,6 +569,8 @@ public:
             info.need_create_table = false;
             printf("sql<%s>\n", buff);
         }
+        //! 记录该socket有效，由于是异步操作，有可能在此期间变成失效
+        m_tmp_socket_cache.insert(sock_);
         info.tq->produce(task_binder_t::gen(&ffcount_service_t::http_query_impl, this, &(info.ffcount), sock_, str_time, table_name, sql));
         
         return 0;
@@ -637,7 +641,11 @@ public:
         rapidjson::Writer<rapidjson::StringBuffer> writer(str_buff, &allocator);
         ret_json.Accept(writer);
         string output(str_buff.GetString(), str_buff.GetSize());
-        sock_->async_send(output);
+        lock_guard_t lock(m_mutex);
+        if (m_tmp_socket_cache.erase(sock_))
+        {
+            sock_->async_send(output);
+        }
         return 0;
     }
 private:
@@ -648,6 +656,7 @@ private:
     vector<task_queue_t*>       m_all_tq;
     mutex_t                     m_mutex;
     timer_service_t             m_timer_service;
+    set<socket_ptr_t>           m_tmp_socket_cache;
 };
 
 
