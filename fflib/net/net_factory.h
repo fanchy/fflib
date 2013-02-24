@@ -23,6 +23,7 @@ public:
         task_queue_pool_t* tg;
         thread_t           thread;
         epoll_impl_t       epoll;
+        vector<acceptor_i*>all_acceptor;
         global_data_t():
             started_flag(false),
             tg(NULL),
@@ -53,11 +54,20 @@ public:
         {
             if (true == started_flag)
             {
+                for (size_t i = 0; i < all_acceptor.size(); ++i)
+                {
+                    all_acceptor[i]->close();
+                }
+                for (size_t i = 0; i < all_acceptor.size(); ++i)
+                {
+                    delete all_acceptor[i];
+                }
+                all_acceptor.clear();
                 tg->close();
                 epoll.close();
                 thread.join();
                 delete tg;
-				tg = NULL;
+                tg = NULL;
             }
         }
     };
@@ -79,6 +89,7 @@ public:
             delete ret;
             return NULL;
         }
+        singleton_t<global_data_t>::instance().all_acceptor.push_back(ret);
         return ret;
     }
     static acceptor_i* gateway_listen(const string& host_, msg_handler_i* msg_handler_)
@@ -93,6 +104,7 @@ public:
             delete ret;
             return NULL;
         }
+        singleton_t<global_data_t>::instance().all_acceptor.push_back(ret);
         return ret;
     }
     static acceptor_i* http_listen(const string& host_, msg_handler_i* msg_handler_)
@@ -107,6 +119,7 @@ public:
             delete ret;
             return NULL;
         }
+        singleton_t<global_data_t>::instance().all_acceptor.push_back(ret);
         return ret;
     }
     static socket_ptr_t connect(const string& host_, msg_handler_i* msg_handler_)
