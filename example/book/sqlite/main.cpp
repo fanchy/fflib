@@ -55,7 +55,6 @@ int main(int argc, char* argv[])
                                 .def(&foo_t::c, "C")
                                 .def(&foo_t::b, "B");
     
-    
     printf("foo insert:<%s>\n", foo.insert_sql().c_str());
     printf("foo select:<%s>\n", foo.select_sql().c_str());
     printf("foo update:<%s>\n", foo.update_sql().c_str());
@@ -64,6 +63,8 @@ int main(int argc, char* argv[])
     {
         printf("exist foo insert:<%s>\n", foo.insert_sql().c_str());
     }
+    foo_t foo2 = foo;foo2.a = 3344;
+    foo2.insert(ffdb);
     foo.select(ffdb);
     if (ffdb.exe_sql("select * from dumy", ret_data))
     {
@@ -99,12 +100,19 @@ int main(int argc, char* argv[])
         printf("exe error:%s\n", ffdb.error_msg());
     }
     dump(ret_data);
-    foo.b += "a";
-    foo.update(ffdb, &foo_t::b);
-    if (ffdb.exe_sql(foo.select_sql(), ret_data))
+    foo.c() = 11.22;
+    foo.update(ffdb, &foo_t::c);
+    if (ffdb.exe_sql("select * from dumy", ret_data))
     {
         printf("exe error:%s\n", ffdb.error_msg());
     }
     dump(ret_data);
+    
+    vector<foo_t> all_foo;
+    foo.select_all(ffdb, all_foo, &foo_t::c, &foo_t::b);
+    for (size_t i = 0; i < all_foo.size(); ++i)
+    {
+        printf("all_foo[%d],A[%d],B[%s],C[%f]\n", i, all_foo[i].a, all_foo[i].b.c_str(), all_foo[i].c());
+    }
     return 0;
 }
