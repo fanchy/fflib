@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
 
     assert(singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0) && "event_log_service 0 not exist");
     
-    event_log_t el("dumy", "A,B,C");el.def(100, "p\"T'p", 5.4);
+    event_log_t el("test"/*dbname*/,"dumy"/*tablename*/, "A,B,C"/*fields name*/);el.def(100, "p\"T'p", 5.4);
     singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
     for (int i = 0; i < NUM; ++i)
     {
@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
     }
     
     event_queryt_t::in_t in_msg;
-    in_msg.table_name = "dumy";
+    in_msg.db_name = "test";
     in_msg.sql = "select * from dumy";
     
     struct lambda_t
@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
             printf("=====>>>>> callback dump data [%s]<<<<<<=======\n", msg_.err_msg.c_str());
             ffdb_t::dump(msg_.ret_data, msg_.col_names);
             
-            event_log_t el("dumy", "A,B,C");el.def(100, "p\"T'p", 5.4);
+            event_log_t el("test", "dumy", "A,B,C");el.def(100, "p\"T'p", 5.4);
             singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
             for (int i = 0; i < NUM; ++i)
             {
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
             
             event_queryt_t::in_t in_msg;
             //in_msg.str_time = "2013/2";//! 查询1月的数据
-            in_msg.table_name = "dumy";
+            in_msg.db_name = "test";
             in_msg.sql = "select * from dumy order by logtime desc limit 5";
             singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
         }
