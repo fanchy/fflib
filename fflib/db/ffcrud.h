@@ -123,13 +123,31 @@ public:
             field_name(name_),
             field_data(p)
         {}
+        ~field_reg_info_t()
+        {
+            if (field_data)
+            {
+                delete field_data;
+                field_data = NULL;
+            }
+        }
         string field_name;
         db_field_info_i* field_data;
     };
-    typedef vector<field_reg_info_t> field_reg_info_vt_t;
+    typedef vector<field_reg_info_t*> field_reg_info_vt_t;
     typedef typename field_reg_info_vt_t::iterator field_reg_info_it_t;
 
 public:
+    virtual ~ffcrud_register_t()
+    {
+        for (typename map<long, field_reg_info_t*>::iterator it = m_index_for_field.begin(); it != m_index_for_field.end(); ++it)
+        {
+            delete it->second;
+        }
+        m_primarykey_fields.clear();
+        m_normal_fields.clear();
+        m_index_for_field.clear();
+    }
     static ffcrud_register_t& bind_table(const string& table_name_, const string& primarykeys_)
     {
         return singleton_t<ffcrud_register_t<T> >::instance().bind_table_and_primarykey(table_name_, primarykeys_);
@@ -141,7 +159,7 @@ public:
         strtool_t::split(primarykeys_, str_vt, ",");
         for (size_t i = 0; i < str_vt.size(); ++i)
         {
-            field_reg_info_t info(str_vt[i]);
+            field_reg_info_t* info = new field_reg_info_t(str_vt[i]);
             m_primarykey_fields.push_back(info);
         }
         return *this;
@@ -153,13 +171,13 @@ public:
         field_reg_info_it_t it = this->find(m_primarykey_fields, field_name_);
         if (it != m_primarykey_fields.end())
         {
-            it->field_data = db_field_impl_factory_t::alloc(p_);
-            m_index_for_field[it->field_data->key()] = &(*it);
+            (*it)->field_data = db_field_impl_factory_t::alloc(p_);
+            m_index_for_field[(*it)->field_data->key()] = (*it);
             return *this;
         }
         
-        m_normal_fields.push_back(field_reg_info_t(field_name_, db_field_impl_factory_t::alloc(p_)));
-        m_index_for_field[m_normal_fields.back().field_data->key()] = &(m_normal_fields[m_normal_fields.size() - 1]);
+        m_normal_fields.push_back(new field_reg_info_t(field_name_, db_field_impl_factory_t::alloc(p_)));
+        m_index_for_field[m_normal_fields.back()->field_data->key()] = (m_normal_fields[m_normal_fields.size() - 1]);
         return *this;
     }
     template<typename RET>
@@ -168,13 +186,14 @@ public:
         field_reg_info_it_t it = this->find(m_primarykey_fields, field_name_);
         if (it != m_primarykey_fields.end())
         {
-            it->field_data = db_field_impl_factory_t::alloc(p_);
-            m_index_for_field[it->field_data->key()] = &(*it);
+            (*it)->field_data = db_field_impl_factory_t::alloc(p_);
+            m_index_for_field[(*it)->field_data->key()] = (*it);
             return *this;
         }
         
-        m_normal_fields.push_back(field_reg_info_t(field_name_, db_field_impl_factory_t::alloc(p_)));
-        m_index_for_field[m_normal_fields.back().field_data->key()] = &(m_normal_fields[m_normal_fields.size() - 1]);
+        m_normal_fields.push_back(new field_reg_info_t(field_name_, db_field_impl_factory_t::alloc(p_)));
+        m_index_for_field[m_normal_fields.back()->field_data->key()] = (m_normal_fields[m_normal_fields.size() - 1]);
+        
         return *this;
     }
     field_reg_info_it_t find(field_reg_info_vt_t& vt_, const string& name_)
@@ -182,7 +201,7 @@ public:
         field_reg_info_it_t it = vt_.begin();
         for (; it != vt_.end(); ++it)
         {
-            if (it->field_name == name_)
+            if ((*it)->field_name == name_)
             {
                 return it;
             }
@@ -226,14 +245,14 @@ public:
 
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
-            sql += CRUD_INFO(T).get_primarykey_fields()[i].field_name + ", ";
-            val += "'" + CRUD_INFO(T).get_primarykey_fields()[i].field_data->set_data(this).get() + "', ";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + ", ";
+            val += "'" + CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(this).get() + "', ";
         }
         
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
         {
-            sql += CRUD_INFO(T).get_normal_fields()[i].field_name + ", ";
-            val += "'" + CRUD_INFO(T).get_normal_fields()[i].field_data->set_data(this).get() + "', ";
+            sql += CRUD_INFO(T).get_normal_fields()[i]->field_name + ", ";
+            val += "'" + CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(this).get() + "', ";
         }
         sql[sql.length() - 2] = ')';
         val[val.length() - 2] = ')';
@@ -248,15 +267,15 @@ public:
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_normal_fields()[i].field_name + " ";
+            sql += CRUD_INFO(T).get_normal_fields()[i]->field_name + " ";
         }
         sql += "FROM " + CRUD_INFO(T).get_table_name() + " WHERE ";
         
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_primarykey_fields()[i].field_name + " = '" + 
-                   CRUD_INFO(T).get_primarykey_fields()[i].field_data->set_data(this).get() + "'";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + " = '" + 
+                   CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(this).get() + "'";
         }
         sql += " limit 1;";
         return sql;
@@ -269,15 +288,15 @@ public:
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_normal_fields()[i].field_name + " = '" +
-                            CRUD_INFO(T).get_normal_fields()[i].field_data->set_data(this).get() + "'";
+            sql += CRUD_INFO(T).get_normal_fields()[i]->field_name + " = '" +
+                            CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(this).get() + "'";
         }
         sql += " WHERE ";
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_primarykey_fields()[i].field_name + " = '" + 
-                   CRUD_INFO(T).get_primarykey_fields()[i].field_data->set_data(this).get() + "'";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + " = '" + 
+                   CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(this).get() + "'";
         }
         return sql;
     }
@@ -290,8 +309,8 @@ public:
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_primarykey_fields()[i].field_name + " = '" + 
-                   CRUD_INFO(T).get_primarykey_fields()[i].field_data->set_data(this).get() + "'";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + " = '" + 
+                   CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(this).get() + "'";
         }
         return sql;
     }
@@ -310,7 +329,7 @@ public:
         }
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
         {
-            CRUD_INFO(T).get_normal_fields()[i].field_data->set_data(this).set(ret_data[0][i]);
+            CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(this).set(ret_data[0][i]);
         }
         return 0;
     }
@@ -345,8 +364,37 @@ public:
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
             if (i != 0) sql += ", ";
-            sql += CRUD_INFO(T).get_primarykey_fields()[i].field_name + " = '" + 
-                   CRUD_INFO(T).get_primarykey_fields()[i].field_data->set_data(this).get() + "'";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + " = '" + 
+                   CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(this).get() + "'";
+        }
+        return sql;
+    }
+    string select_sql(vector<db_field_info_i*> vt_)
+    {
+        string sql = "SELECT ";
+        size_t n = 0;
+        for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
+        {
+            if (n++ != 0) sql += ", ";
+            sql += CRUD_INFO(T).get_primarykey_fields()[i]->field_name + " ";
+        }
+        for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+        {
+            if (n++ != 0) sql += ", ";
+            sql += CRUD_INFO(T).get_normal_fields()[i]->field_name + " ";
+        }
+        sql += "FROM " + CRUD_INFO(T).get_table_name() + " WHERE ";
+        
+        for (size_t i = 0; i < vt_.size(); ++i)
+        {
+            typename ffcrud_register_t<T>::field_reg_info_t* info = CRUD_INFO(T).get_field_by_key(vt_[i]->key());
+            
+            if (NULL == info || NULL == info->field_data)
+            {
+                return "";
+            }
+            if (i != 0) sql += " AND ";
+            sql += info->field_name + " = '" + info->field_data->set_data(this).get() + "'";
         }
         return sql;
     }
@@ -512,6 +560,114 @@ public:
         return -1;
     }
     
+    template <typename ARG1>
+    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1)
+    {
+        vector<vector<string> > ret_data;
+        vector<db_field_info_i*> args;
+        args.push_back(db_field_impl_factory_t::alloc(arg1));
+
+        if (ffdb.exe_sql(this->select_sql(args), ret_data))
+        {
+            return -1;
+        }
+        for (size_t n = 0; n < ret_data.size(); ++n)
+        {
+            ret_.push_back(T());
+            for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i]);
+            }
+            for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i + CRUD_INFO(T).get_primarykey_fields().size()]);
+            }
+        }
+        return 0;
+    }
+    template <typename ARG1, typename ARG2>
+    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2)
+    {
+        vector<vector<string> > ret_data;
+        vector<db_field_info_i*> args;
+        args.push_back(db_field_impl_factory_t::alloc(arg1));
+        args.push_back(db_field_impl_factory_t::alloc(arg2));
+
+        if (ffdb.exe_sql(this->select_sql(args), ret_data))
+        {
+            printf("Sql:%s\n", ffdb.error_msg());
+            return -1;
+        }
+        
+        for (size_t n = 0; n < ret_data.size(); ++n)
+        {
+            ret_.push_back(T());
+            for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i]);
+            }
+            for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i + CRUD_INFO(T).get_primarykey_fields().size()]);
+            }
+        }
+        return 0;
+    }
+    template <typename ARG1, typename ARG2, typename ARG3>
+    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3)
+    {
+        vector<vector<string> > ret_data;
+        vector<db_field_info_i*> args;
+        args.push_back(db_field_impl_factory_t::alloc(arg1));
+        args.push_back(db_field_impl_factory_t::alloc(arg2));
+        args.push_back(db_field_impl_factory_t::alloc(arg3));
+
+        if (ffdb.exe_sql(this->select_sql(args), ret_data))
+        {
+            return -1;
+        }
+        for (size_t n = 0; n < ret_data.size(); ++n)
+        {
+            ret_.push_back(T());
+            for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i]);
+            }
+            for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i + CRUD_INFO(T).get_primarykey_fields().size()]);
+            }
+        }
+        return 0;
+    }
+    template <typename ARG1, typename ARG2, typename ARG3, typename ARG4>
+    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4)
+    {
+        vector<vector<string> > ret_data;
+        vector<db_field_info_i*> args;
+        args.push_back(db_field_impl_factory_t::alloc(arg1));
+        args.push_back(db_field_impl_factory_t::alloc(arg2));
+        args.push_back(db_field_impl_factory_t::alloc(arg3));
+        args.push_back(db_field_impl_factory_t::alloc(arg4));
+
+        if (ffdb.exe_sql(this->select_sql(args), ret_data))
+        {
+            return -1;
+        }
+        for (size_t n = 0; n < ret_data.size(); ++n)
+        {
+            ret_.push_back(T());
+            for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_primarykey_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i]);
+            }
+            for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+            {
+                CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(&(ret_[ret_.size()-1])).set(ret_data[n][i + CRUD_INFO(T).get_primarykey_fields().size()]);
+            }
+        }
+        return 0;
+    }
 };
 }
 
