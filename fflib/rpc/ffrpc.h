@@ -1,6 +1,6 @@
 //! 消息发送管理
-#ifndef _MSG_BUS_H_
-#define _MSG_BUS_H_
+#ifndef _FF_FFRPC_H_
+#define _FF_FFRPC_H_
 
 #include <string>
 #include <map>
@@ -12,11 +12,11 @@ using namespace std;
 #include "rpc/rpc_service_group.h"
 #include "rpc/rpc_future.h"
 #include "base/signal_helper.h"
-#include "rpc/msg_bus_i.h"
+#include "rpc/rpc_reg.h"
 
 namespace ff {
 
-class ffrpc_t: public msg_bus_i
+class ffrpc_t: public rpc_reg_i
 {
     typedef map<uint16_t, rpc_service_group_t*>  service_map_t;
 public:
@@ -56,7 +56,7 @@ public:
         return -1;
     }
     template<typename T, typename R>
-    int call(const string& service_name_, int index_, T& msg, R& cb_)
+    int call(const string& service_name_, int index_, T& msg, R cb_)
     {
         rpc_service_group_t* rsg = get_service_group(service_name_);
         if (rsg)

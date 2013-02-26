@@ -1,4 +1,4 @@
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 #include "log/log.h"
 
 using namespace ff;
