@@ -13,7 +13,7 @@ using namespace std;
 
 namespace ff {
 
-class msg_bus_t;
+class ffrpc_t;
 class msg_bus_i;
  
 struct callback_null_t

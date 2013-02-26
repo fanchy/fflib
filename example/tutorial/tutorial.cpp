@@ -22,7 +22,7 @@ public:
 void test_async_request_reply()
 {
     login_server_t login_server;
-    singleton_t<msg_bus_t>::instance().create_service("login_server", 1)
+    singleton_t<ffrpc_t>::instance().create_service("login_server", 1)
         .bind_service(&login_server)
         .reg(&login_server_t::verify);
     
@@ -46,7 +46,7 @@ void test_async_request_reply()
     in.value = "ILoveYou";
     socket_ptr_t flash_socket = NULL;//! TODO
 
-    singleton_t<msg_bus_t>::instance()
+    singleton_t<ffrpc_t>::instance()
     .get_service_group("login_server_t")
     ->get_service(1)
     ->async_call(in, binder_t::callback(&lambda_t::callback, flash_socket));
@@ -66,7 +66,7 @@ public:
 void test_sync_request_reply()
 {
     super_server_t super_server;
-    singleton_t<msg_bus_t>::instance().create_service("super_server", 1)
+    singleton_t<ffrpc_t>::instance().create_service("super_server", 1)
         .bind_service(&super_server)
         .reg(&super_server_t::get_config);
     
@@ -76,7 +76,7 @@ void test_sync_request_reply()
     in.server_type = 1;
     in.server_id   = 1;
     const config_t::out_t& out = rpc_future.call(
-        singleton_t<msg_bus_t>::instance().get_service_group("super_server")
+        singleton_t<ffrpc_t>::instance().get_service_group("super_server")
         ->get_service(1), in);
     cout << out.value.size() <<"\n";
     //std::foreach(out.value.begin(), out.value.end(), fuctor_xx);
@@ -108,7 +108,7 @@ public:
 void test_p2p()
 {
     gateway_server_t gateway_server;
-    singleton_t<msg_bus_t>::instance().create_service("gateway_server", 1)
+    singleton_t<ffrpc_t>::instance().create_service("gateway_server", 1)
         .bind_service(&gateway_server)
         .reg(&gateway_server_t::force_user_offline);
     
@@ -122,20 +122,20 @@ void test_p2p()
         static void callback_TODO2(user_login_t::out_t& out_)
         {}
     };
-    singleton_t<msg_bus_t>::instance()
+    singleton_t<ffrpc_t>::instance()
         .get_service_group("session_server")
         ->get_service(1)
         ->async_call(in, &lambda_t::callback_TODO);
 
     session_server_t session_server;
-    singleton_t<msg_bus_t>::instance().create_service("session_server", 1)
+    singleton_t<ffrpc_t>::instance().create_service("session_server", 1)
         .bind_service(&session_server)
         .reg(&session_server_t::user_login);
 
     force_user_offline_t::in_t in2;
     in2.uid = 520;
     
-    singleton_t<msg_bus_t>::instance()
+    singleton_t<ffrpc_t>::instance()
     .get_service_group("gateway_server")
         ->get_service(1)
     ->async_call(in2, &lambda_t::callback_TODO2);
@@ -155,7 +155,7 @@ public:
 void test_multi_broadcast()
 {
     scene_server_t scene_server;
-    singleton_t<msg_bus_t>::instance().create_service("scene_server", 1)
+    singleton_t<ffrpc_t>::instance().create_service("scene_server", 1)
         .bind_service(&scene_server)
         .reg(&scene_server_t::reload_config);
     
@@ -170,7 +170,7 @@ void test_multi_broadcast()
         }
     };
     
-    singleton_t<msg_bus_t>::instance()
+    singleton_t<ffrpc_t>::instance()
         .get_service_group("scene_server")
         ->foreach(&lambda_t::reload_config);
 }
@@ -204,7 +204,7 @@ void test_map_reduce()
     
     for (int i = 0; i < 5; ++i)
     {
-        singleton_t<msg_bus_t>::instance().create_service("worker", 1)
+        singleton_t<ffrpc_t>::instance().create_service("worker", 1)
             .bind_service(&worker)
             .reg(&worker_t::word_count);
     }
@@ -245,9 +245,9 @@ void test_map_reduce()
                 word_count_t::in_t in;
                 in.str = p[i];
                 
-                singleton_t<msg_bus_t>::instance()
+                singleton_t<ffrpc_t>::instance()
                     .get_service_group("worker")
-                    ->get_service(1 + i % singleton_t<msg_bus_t>::instance().get_service_group("worker")->size())
+                    ->get_service(1 + i % singleton_t<ffrpc_t>::instance().get_service_group("worker")->size())
                     ->async_call(in, binder_t::callback(&lambda_t::reduce, result, dest_size));
             }
         }

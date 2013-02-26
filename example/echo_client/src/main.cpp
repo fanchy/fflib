@@ -29,11 +29,11 @@ int main(int argc, char* argv[])
     char buff[128];
     snprintf(buff, sizeof(buff), "tcp://%s:%s", "127.0.0.1", "10241");
 
-    assert(0 == singleton_t<msg_bus_t>::instance().open(buff));
+    assert(0 == singleton_t<ffrpc_t>::instance().open(buff));
 
-    assert(singleton_t<msg_bus_t>::instance().get_service_group("echo") && "echo service group not exist");
+    assert(singleton_t<ffrpc_t>::instance().get_service_group("echo") && "echo service group not exist");
 
-    assert(singleton_t<msg_bus_t>::instance().get_service_group("echo")->get_service(g_index) && "echo servie 1 not exist");
+    assert(singleton_t<ffrpc_t>::instance().get_service_group("echo")->get_service(g_index) && "echo servie 1 not exist");
 
     sleep(1);
 
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
             echo_t::in_t in;
             in.value = "XXX_echo_test_XXX";
             
-            singleton_t<msg_bus_t>::instance().get_service_group("echo")->get_service(g_index)->async_call(in, &lambda_t::callback);
+            singleton_t<ffrpc_t>::instance().get_service_group("echo")->get_service(g_index)->async_call(in, &lambda_t::callback);
         }
         
     };
@@ -62,11 +62,11 @@ int main(int argc, char* argv[])
     {
     	echo_t::in_t in;
         in.value = "XXX_echo_test_XXX";
-    	singleton_t<msg_bus_t>::instance().get_service_group("echo")->get_service(g_index)->async_call(in, &lambda_t::callback);
+    	singleton_t<ffrpc_t>::instance().get_service_group("echo")->get_service(g_index)->async_call(in, &lambda_t::callback);
     }
 
     signal_helper_t::wait();
-    singleton_t<msg_bus_t>::instance().close();
+    singleton_t<ffrpc_t>::instance().close();
     cout <<"\noh end\n";
     
     return 0;

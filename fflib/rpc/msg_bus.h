@@ -16,12 +16,12 @@ using namespace std;
 
 namespace ff {
 
-class msg_bus_t: public msg_bus_i
+class ffrpc_t: public msg_bus_i
 {
     typedef map<uint16_t, rpc_service_group_t*>  service_map_t;
 public:
-    msg_bus_t();
-    ~msg_bus_t();
+    ffrpc_t();
+    ~ffrpc_t();
 
     rpc_service_group_t& create_service_group(const string& name_);
     rpc_service_t&       create_service(const string& name_, uint16_t id_);
@@ -40,6 +40,36 @@ public:
     int register_service(const string& name_, uint16_t gid_, uint16_t id_);
     int register_interface(const string& in_name_, const string& out_name_, uint16_t gid_, uint16_t id_, uint16_t& in_alloc_id_, uint16_t& out_alloc_id_);
     
+    template<typename T>
+    int call(const string& service_name_, int index_, T& msg)
+    {
+        rpc_service_group_t* rsg = get_service_group(service_name_);
+        if (rsg)
+        {
+            rpc_service_t* rs = rsg->get_service(index_);
+            if (rs)
+            {
+                rs->async_call(msg);
+                return 0;
+            }
+        }
+        return -1;
+    }
+    template<typename T, typename R>
+    int call(const string& service_name_, int index_, T& msg, R& cb_)
+    {
+        rpc_service_group_t* rsg = get_service_group(service_name_);
+        if (rsg)
+        {
+            rpc_service_t* rs = rsg->get_service(index_);
+            if (rs)
+            {
+                rs->async_call(msg, cb_);
+                return 0;
+            }
+        }
+        return -1;
+    }
 private:
     mutex_t             m_mutex;
     uint32_t            m_uuid;

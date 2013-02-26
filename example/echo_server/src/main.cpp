@@ -30,19 +30,19 @@ int main(int argc, char* argv[])
     char buff[128];
     snprintf(buff, sizeof(buff), "tcp://%s:%s", "127.0.0.1", "10241");
     
-    msg_bus_t msg_bus;
-    assert(0 == singleton_t<msg_bus_t>::instance().open("tcp://127.0.0.1:10241") && "can't connnect to broker");
+    ffrpc_t msg_bus;
+    assert(0 == singleton_t<ffrpc_t>::instance().open("tcp://127.0.0.1:10241") && "can't connnect to broker");
 
     echo_service_t f;
 
-    singleton_t<msg_bus_t>::instance().create_service_group("echo");
-    singleton_t<msg_bus_t>::instance().create_service("echo", g_index)
+    singleton_t<ffrpc_t>::instance().create_service_group("echo");
+    singleton_t<ffrpc_t>::instance().create_service("echo", g_index)
             .bind_service(&f)
             .reg(&echo_service_t::echo);
     
     signal_helper_t::wait();
 
-    singleton_t<msg_bus_t>::instance().close();
+    singleton_t<ffrpc_t>::instance().close();
     //usleep(1000);
     cout <<"\noh end\n";
     return 0;

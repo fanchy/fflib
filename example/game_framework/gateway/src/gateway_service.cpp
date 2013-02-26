@@ -31,7 +31,7 @@ int gateway_service_t::handle_login(gate_msg_tool_t& msg_, socket_ptr_t sock_)
             msg_sender_t::send_to_client(sock_, msg_);
         }
     };
-    singleton_t<msg_bus_t>::instance().get_service_group("manager")
+    singleton_t<ffrpc_t>::instance().get_service_group("manager")
                                       ->get_service(0)
                                       ->async_call(msg_, binder_t::callback(&lambda_t::callback, this, sock_));
     return 0;
@@ -52,7 +52,7 @@ int gateway_service_t::handle_logout(socket_ptr_t sock_)
     in.uid = sock_->get_data<client_session_t>()->uid;
 
     del_user(in.uid);
-    singleton_t<msg_bus_t>::instance().get_service_group("manager")
+    singleton_t<ffrpc_t>::instance().get_service_group("manager")
                                       ->get_service(0)
                                       ->async_call(in, &lambda_t::callback);
     
@@ -75,7 +75,7 @@ int gateway_service_t::handle_common_logic(gate_msg_tool_t& msg_, socket_ptr_t s
     common_msg_t::in_t dest_msg;
     dest_msg.uid = uid;
     dest_msg.content = msg_.packet_body;
-    singleton_t<msg_bus_t>::instance().get_service_group("logic")
+    singleton_t<ffrpc_t>::instance().get_service_group("logic")
                                         ->get_service(0)
                                         ->async_call(dest_msg, binder_t::callback(&lambda_t::callback, uid));
     return 0;

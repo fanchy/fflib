@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
 //    rpc_service.reg(&foo);
 //    rpc_service.reg(&foo_t::foo, &f);
     
-    msg_bus_t msg_bus;
+    ffrpc_t msg_bus;
     msg_bus.open("tcp://127.0.0.1:10241");
     /*
     msg_bus.create_service_group("teeeest");

@@ -3,13 +3,13 @@
 
 using namespace ff;
 
-msg_bus_t::msg_bus_t():
+ffrpc_t::ffrpc_t():
     m_uuid(0),
     m_broker_service(NULL)
 {
 }
 
-msg_bus_t::~msg_bus_t()
+ffrpc_t::~ffrpc_t()
 {
     for (service_map_t::iterator it = m_service_map.begin(); it != m_service_map.end(); ++it)
     {
@@ -18,7 +18,7 @@ msg_bus_t::~msg_bus_t()
     m_service_map.clear();
 }
 
-rpc_service_group_t& msg_bus_t::create_service_group(const string& name_)
+rpc_service_group_t& ffrpc_t::create_service_group(const string& name_)
 {
     for (service_map_t::iterator it = m_service_map.begin(); it != m_service_map.end(); ++it)
     {
@@ -34,20 +34,20 @@ rpc_service_group_t& msg_bus_t::create_service_group(const string& name_)
     in.service_name = name_;
     const create_service_group_t::out_t& out = rpc_future.call(m_broker_service, in);
     
-    logtrace((MSG_BUS, "msg_bus_t::create_service_group out sgid[%u]", out.service_id));
+    logtrace((MSG_BUS, "ffrpc_t::create_service_group out sgid[%u]", out.service_id));
 
     rpc_service_group_t* rsg = new rpc_service_group_t(this, name_, out.service_id);
     m_service_map[rsg->get_id()] = rsg;
     return *rsg;
 }
 
-rpc_service_t& msg_bus_t::create_service(const string& name_, uint16_t id_)
+rpc_service_t& ffrpc_t::create_service(const string& name_, uint16_t id_)
 {
     rpc_service_group_t& rsg = create_service_group(name_);
     return rsg.create_service(id_);
 }
 
-rpc_service_group_t* msg_bus_t::get_service_group(uint16_t id_)
+rpc_service_group_t* ffrpc_t::get_service_group(uint16_t id_)
 {
     service_map_t::iterator it = m_service_map.find(id_);
     if (it != m_service_map.end())
@@ -57,7 +57,7 @@ rpc_service_group_t* msg_bus_t::get_service_group(uint16_t id_)
     return NULL;
 }
 
-rpc_service_group_t* msg_bus_t::get_service_group(const string& name_)
+rpc_service_group_t* ffrpc_t::get_service_group(const string& name_)
 {
     service_map_t::iterator it = m_service_map.begin();
     for (; it != m_service_map.end(); ++it)
@@ -70,7 +70,7 @@ rpc_service_group_t* msg_bus_t::get_service_group(const string& name_)
     return NULL;
 }
 
-int msg_bus_t::handle_broken(socket_ptr_t sock_)
+int ffrpc_t::handle_broken(socket_ptr_t sock_)
 {
     lock_guard_t lock(m_mutex);
     if (m_socket == sock_)
@@ -82,7 +82,7 @@ int msg_bus_t::handle_broken(socket_ptr_t sock_)
     return 0;    
 }
 
-int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
+int ffrpc_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
 {
     lock_guard_t lock(m_mutex);
     msg_tool_t msg_tool;
@@ -91,7 +91,7 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
     {
         msg_tool.decode(msg_.get_body());
 
-        logdebug((MSG_BUS, "msg_bus_t::handle_msg: cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
+        logdebug((MSG_BUS, "ffrpc_t::handle_msg: cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
                             msg_.get_cmd(), msg_tool.get_name().c_str(),
                             msg_tool.get_group_id(), msg_tool.get_service_id()));
 
@@ -131,7 +131,7 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
         rpc_service_group_t* rsg = get_service_group(msg_tool.get_group_id());
         if (NULL == rsg)
         {
-            logerror((MSG_BUS, "msg_bus_t::handle_msg: none sgid cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
+            logerror((MSG_BUS, "ffrpc_t::handle_msg: none sgid cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
                       msg_.get_cmd(), msg_tool.get_name().c_str(),
                       msg_tool.get_group_id(), msg_tool.get_service_id()));
             return -1;
@@ -140,7 +140,7 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
         rpc_service_t* rs = rsg->get_service(msg_tool.get_service_id());
         if (NULL == rs)
         {
-            logerror((MSG_BUS, "msg_bus_t::handle_msg: none sid cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
+            logerror((MSG_BUS, "ffrpc_t::handle_msg: none sid cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
                       msg_.get_cmd(), msg_tool.get_name().c_str(),
                       msg_tool.get_group_id(), msg_tool.get_service_id()));
             return -1;
@@ -156,7 +156,7 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
         }
         else
         {
-            logerror((MSG_BUS, "msg_bus_t::handle_msg: none cmd==>cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
+            logerror((MSG_BUS, "ffrpc_t::handle_msg: none cmd==>cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
                       msg_.get_cmd(), msg_tool.get_name().c_str(),
                       msg_tool.get_group_id(), msg_tool.get_service_id()));
             return -1;
@@ -164,7 +164,7 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
     }
     catch (exception& e_)
     {
-        logerror((MSG_BUS, "msg_bus_t::handle_msg: exception<%s> cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
+        logerror((MSG_BUS, "ffrpc_t::handle_msg: exception<%s> cmd[%u], msg_name<%s>, sgid[%u], sig[%u]",
                   e_.what(), msg_.get_cmd(), msg_tool.get_name().c_str(),
                   msg_tool.get_group_id(), msg_tool.get_service_id()));
 
@@ -173,12 +173,12 @@ int msg_bus_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
     return 0;
 }
 
-int msg_bus_t::open(const string& host_)
+int ffrpc_t::open(const string& host_)
 {
     m_socket = net_factory_t::connect(host_, this);
     if (NULL == m_socket)
     {
-        logerror((MSG_BUS, "msg_bus_t::open failed, can't connect to remote broker<%s>", host_.c_str()));
+        logerror((MSG_BUS, "ffrpc_t::open failed, can't connect to remote broker<%s>", host_.c_str()));
         return -1;
     }
  
@@ -194,29 +194,29 @@ int msg_bus_t::open(const string& host_)
         rpc_service_group_t* rsg = new rpc_service_group_t(this, out.group_name_vt[i], out.group_id_vt[i]);
         m_service_map[rsg->get_id()] = rsg;
         
-        logtrace((MSG_BUS, "msg_bus_t::open add service<%s> sgid[%u]", out.group_name_vt[i].c_str(), rsg->get_id()));
+        logtrace((MSG_BUS, "ffrpc_t::open add service<%s> sgid[%u]", out.group_name_vt[i].c_str(), rsg->get_id()));
     }
 
     for (size_t i = 0; i< out.id_info_vt.size(); ++i)
     {
         rpc_service_t* rs = new rpc_service_t(this, out.id_info_vt[i].sgid, out.id_info_vt[i].sid);
-        logtrace((MSG_BUS, "msg_bus_t::open id_info_vt sgid<%u>", out.id_info_vt[i].sgid));
+        logtrace((MSG_BUS, "ffrpc_t::open id_info_vt sgid<%u>", out.id_info_vt[i].sgid));
         get_service_group(out.id_info_vt[i].sgid)->add_service(out.id_info_vt[i].sid, rs);
     }
     
     for (size_t i = 0; i< out.msg_name_vt.size(); ++i)
     {
         singleton_t<msg_name_store_t>::instance().add_msg(out.msg_name_vt[i], out.msg_id_vt[i]);
-        logtrace((MSG_BUS, "msg_bus_t::open add interface<%s>, msgid[%u]", out.msg_name_vt[i].c_str(), out.msg_id_vt[i]));
+        logtrace((MSG_BUS, "ffrpc_t::open add interface<%s>, msgid[%u]", out.msg_name_vt[i].c_str(), out.msg_id_vt[i]));
     }
     
     for (size_t i = 0; i< out.broker_slave_host.size(); ++i)
     {
-        logtrace((MSG_BUS, "msg_bus_t::open add slave broker host<%s>", out.broker_slave_host[i].c_str()));
+        logtrace((MSG_BUS, "ffrpc_t::open add slave broker host<%s>", out.broker_slave_host[i].c_str()));
         socket_ptr_t socket_ptr = net_factory_t::connect(out.broker_slave_host[i], this);
         if (NULL == socket_ptr)
         {
-            logerror((MSG_BUS, "msg_bus_t::open connect slave broker host<%s> failed", out.broker_slave_host[i].c_str()));
+            logerror((MSG_BUS, "ffrpc_t::open connect slave broker host<%s> failed", out.broker_slave_host[i].c_str()));
             return -1;
         }
         m_broker_slaves.push_back(socket_ptr);
@@ -230,7 +230,7 @@ int msg_bus_t::open(const string& host_)
     return 0;
 }
 
-int msg_bus_t::close()
+int ffrpc_t::close()
 {
     if (m_socket)
     {
@@ -240,7 +240,7 @@ int msg_bus_t::close()
     return 0;
 }
 
-socket_ptr_t msg_bus_t::get_socket(const rpc_service_t* rs_)
+socket_ptr_t ffrpc_t::get_socket(const rpc_service_t* rs_)
 {
     if (m_broker_service != rs_ && false == m_broker_slaves.empty())
     {
@@ -249,7 +249,7 @@ socket_ptr_t msg_bus_t::get_socket(const rpc_service_t* rs_)
     return m_socket;
 }
 
-int msg_bus_t::register_service(const string& name_, uint16_t gid_, uint16_t id_)
+int ffrpc_t::register_service(const string& name_, uint16_t gid_, uint16_t id_)
 {
     rpc_future_t<create_service_t::out_t> rpc_future;
     create_service_t::in_t in;
@@ -258,11 +258,11 @@ int msg_bus_t::register_service(const string& name_, uint16_t gid_, uint16_t id_
     in.new_service_id = id_;
     const create_service_t::out_t& out = rpc_future.call(m_broker_service, in);
 
-    logtrace((MSG_BUS, "msg_bus_t::register_service ret value[%d]", out.value));
+    logtrace((MSG_BUS, "ffrpc_t::register_service ret value[%d]", out.value));
     return out.value == true? 0: -1;
 }
 
-int msg_bus_t::register_interface(const string& in_name_, const string& out_name_, uint16_t gid_, uint16_t id_, uint16_t& in_alloc_id_, uint16_t& out_alloc_id_)
+int ffrpc_t::register_interface(const string& in_name_, const string& out_name_, uint16_t gid_, uint16_t id_, uint16_t& in_alloc_id_, uint16_t& out_alloc_id_)
 {
     rpc_future_t<reg_interface_t::out_t> rpc_future;
     reg_interface_t::in_t in;
@@ -276,7 +276,7 @@ int msg_bus_t::register_interface(const string& in_name_, const string& out_name
 
     in_alloc_id_  = out.alloc_id;
     out_alloc_id_ = out.out_alloc_id;
-    logtrace((MSG_BUS, "msg_bus_t::register_interface ret in<%s>==>[%d], out<%s>==>[%u]", in_name_.c_str(), out.alloc_id, out_name_.c_str(), out_alloc_id_));
+    logtrace((MSG_BUS, "ffrpc_t::register_interface ret in<%s>==>[%d], out<%s>==>[%u]", in_name_.c_str(), out.alloc_id, out_name_.c_str(), out_alloc_id_));
 
     return 0;
 }

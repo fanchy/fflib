@@ -17,20 +17,20 @@ int main(int argc, char* argv[])
         return 1;
     }
     
-    assert(0 == singleton_t<msg_bus_t>::instance().open(arg_helper.get_option_value("-l")) && "can't connnect to broker");
+    assert(0 == singleton_t<ffrpc_t>::instance().open(arg_helper.get_option_value("-l")) && "can't connnect to broker");
     
-    assert(singleton_t<msg_bus_t>::instance().get_service_group("event_log_service") && "event_log_service group not exist");
+    assert(singleton_t<ffrpc_t>::instance().get_service_group("event_log_service") && "event_log_service group not exist");
 
-    assert(singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0) && "event_log_service 0 not exist");
+    assert(singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0) && "event_log_service 0 not exist");
     
     event_log_t el("test"/*dbname*/,"dumy"/*tablename*/, "A,B,C"/*fields name*/);el.def(100, "p\"T'p", 5.4);
-    singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+    singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
     for (int i = 0; i < NUM; ++i)
     {
         char buff[64];
         snprintf(buff, sizeof(buff), "dumy_%d", i%8);
         event_log_t el(buff, "A,B,C");el.def(100, "pp", 5.4);
-        singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+        singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
     }
     
     event_queryt_t::in_t in_msg;
@@ -45,13 +45,13 @@ int main(int argc, char* argv[])
             ffdb_t::dump(msg_.ret_data, msg_.col_names);
             
             event_log_t el("test", "dumy", "A,B,C");el.def(100, "p\"T'p", 5.4);
-            singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+            singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
             for (int i = 0; i < NUM; ++i)
             {
                 char buff[64];
                 snprintf(buff, sizeof(buff), "dumy_%d", i%8);
                 event_log_t el(buff, "A,B,C");el.def(100, "pp", 5.4);
-                singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+                singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
             }
             sleep(1);
             
@@ -59,13 +59,13 @@ int main(int argc, char* argv[])
             //in_msg.str_time = "2013/2";//! 查询1月的数据
             in_msg.db_name = "test";
             in_msg.sql = "select * from dumy order by logtime desc limit 5";
-            singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
+            singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
         }
     };
     
-    singleton_t<msg_bus_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
+    singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
     signal_helper_t::wait();
-    singleton_t<msg_bus_t>::instance().close();
+    singleton_t<ffrpc_t>::instance().close();
 
     return 0;
 }

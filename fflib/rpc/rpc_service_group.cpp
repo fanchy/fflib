@@ -3,7 +3,7 @@
 
 using namespace ff;
 
-rpc_service_group_t::rpc_service_group_t(msg_bus_t* mb_, const string& name_, uint16_t id_):
+rpc_service_group_t::rpc_service_group_t(ffrpc_t* mb_, const string& name_, uint16_t id_):
     m_id(id_),
     m_name(name_),
     m_msg_bus(mb_)

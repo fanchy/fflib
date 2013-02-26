@@ -38,7 +38,7 @@ int logic_service_t::login(login_t::in_t& msg_, rpc_callcack_t<login_t::out_t>& 
     broadcast_t::in_t broadcast;
     broadcast.content = notify_msg.encode();
 
-    singleton_t<msg_bus_t>::instance().get_service_group("gateway")
+    singleton_t<ffrpc_t>::instance().get_service_group("gateway")
                                         ->get_service(0)
                                         ->async_call(broadcast, &lambda_t::callback);
 
@@ -64,7 +64,7 @@ int logic_service_t::logout(logout_t::in_t& msg_, rpc_callcack_t<logout_t::out_t
     broadcast_t::in_t broadcast;
     broadcast.content = notify_msg.encode();
     
-    singleton_t<msg_bus_t>::instance().get_service_group("gateway")
+    singleton_t<ffrpc_t>::instance().get_service_group("gateway")
                                         ->get_service(0)
                                         ->async_call(broadcast, &lambda_t::callback);
     return 0;

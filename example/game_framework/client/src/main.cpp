@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
     msg_sender_t::send(socket_ptr, 0, in);
 
     signal_helper_t::wait();
-    singleton_t<msg_bus_t>::instance().close();
+    singleton_t<ffrpc_t>::instance().close();
     cout <<"\noh end\n";
     
     return 0;
