@@ -15,7 +15,7 @@ using namespace std;
 #include "db/ffdb.h"
 #include "net/codec.h"
 #include "base/task_queue_impl.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 #include "base/time_tool.h"
 #include "net/msg_handler_i.h"
 

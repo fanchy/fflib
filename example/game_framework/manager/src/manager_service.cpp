@@ -1,5 +1,5 @@
 #include "manager_service.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 #include "common_msg_def.h"
 #include "rpc/rpc_callback.h"
 #include "net/msg_sender.h"

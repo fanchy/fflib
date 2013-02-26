@@ -3,7 +3,7 @@
 #define _MANAGER_SERVICE_H_
 
 #include "common_msg_def.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 
 namespace ff {
 

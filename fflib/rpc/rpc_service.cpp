@@ -1,15 +1,15 @@
 #include "rpc/rpc_service.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 #include "log/log.h"
 
 using namespace ff;
 
-rpc_service_t::rpc_service_t(msg_bus_i* mb_, uint16_t service_group_id_, uint16_t servie_id_):
+rpc_service_t::rpc_service_t(rpc_reg_i* mb_, uint16_t service_group_id_, uint16_t servie_id_):
     m_service_group_id(service_group_id_),
     m_service_id(servie_id_),
     m_uuid(0),
     m_bind_service_ptr(NULL),
-    m_msg_bus(mb_)
+    m_rpc_reg(mb_)
 {
 }
 
@@ -34,7 +34,7 @@ uint16_t rpc_service_t::get_id() const
 
 socket_ptr_t rpc_service_t::get_socket() const
 {
-    return m_msg_bus->get_socket(this);
+    return m_rpc_reg->get_socket(this);
 }
 
 void rpc_service_t::async_call(msg_i& msg_, uint16_t msg_id_, callback_wrapper_i* callback_)
@@ -102,7 +102,7 @@ int rpc_service_t::add_interface(const string& in_name_, const string& out_name_
 {
     uint16_t in_msg_id  = 0;
     uint16_t out_msg_id = 0;
-    int ret = m_msg_bus->register_interface(in_name_, out_name_, get_group_id(), get_id(), in_msg_id, out_msg_id);
+    int ret = m_rpc_reg->register_interface(in_name_, out_name_, get_group_id(), get_id(), in_msg_id, out_msg_id);
 
     assert(ret == 0 && func_ && m_interface_map.insert(make_pair(in_msg_id, func_)).second == true  && "interface has existed");
 

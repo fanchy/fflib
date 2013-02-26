@@ -1,5 +1,5 @@
 #include "rpc/rpc_service_group.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 
 using namespace ff;
 

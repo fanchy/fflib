@@ -24,13 +24,13 @@ int main(int argc, char* argv[])
     assert(singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0) && "event_log_service 0 not exist");
     
     event_log_t el("test"/*dbname*/,"dumy"/*tablename*/, "A,B,C"/*fields name*/);el.def(100, "p\"T'p", 5.4);
-    singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+    singleton_t<ffrpc_t>::instance().call("event_log_service", 0, el);
     for (int i = 0; i < NUM; ++i)
     {
         char buff[64];
         snprintf(buff, sizeof(buff), "dumy_%d", i%8);
         event_log_t el(buff, "A,B,C");el.def(100, "pp", 5.4);
-        singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+        singleton_t<ffrpc_t>::instance().call("event_log_service", 0, el);
     }
     
     event_queryt_t::in_t in_msg;
@@ -45,13 +45,13 @@ int main(int argc, char* argv[])
             ffdb_t::dump(msg_.ret_data, msg_.col_names);
             
             event_log_t el("test", "dumy", "A,B,C");el.def(100, "p\"T'p", 5.4);
-            singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+            singleton_t<ffrpc_t>::instance().call("event_log_service", 0, el);
             for (int i = 0; i < NUM; ++i)
             {
                 char buff[64];
                 snprintf(buff, sizeof(buff), "dumy_%d", i%8);
                 event_log_t el(buff, "A,B,C");el.def(100, "pp", 5.4);
-                singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(el);
+                singleton_t<ffrpc_t>::instance().call("event_log_service", 0, el);
             }
             sleep(1);
             
@@ -59,11 +59,11 @@ int main(int argc, char* argv[])
             //in_msg.str_time = "2013/2";//! 查询1月的数据
             in_msg.db_name = "test";
             in_msg.sql = "select * from dumy order by logtime desc limit 5";
-            singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
+            singleton_t<ffrpc_t>::instance().call("event_log_service", 0, in_msg, &lambda_t::callback);
         }
     };
     
-    singleton_t<ffrpc_t>::instance().get_service_group("event_log_service")->get_service(0)->async_call(in_msg, &lambda_t::callback);
+    singleton_t<ffrpc_t>::instance().call("event_log_service", 0, in_msg, &lambda_t::callback);
     signal_helper_t::wait();
     singleton_t<ffrpc_t>::instance().close();
 

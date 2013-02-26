@@ -3,7 +3,7 @@ using namespace std;
 
 #include "msg_def.h"
 #include "log/log.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 
 using namespace ff;
 

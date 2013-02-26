@@ -14,7 +14,7 @@ using namespace std;
 namespace ff {
 
 class ffrpc_t;
-class msg_bus_i;
+class rpc_reg_i;
  
 struct callback_null_t
 {
@@ -28,7 +28,7 @@ class rpc_service_t
     typedef map<uint32_t, msg_process_func_i*>      interface_map_t;
 
 public:
-    rpc_service_t(msg_bus_i* mb_, uint16_t service_group_id_, uint16_t servie_id_);
+    rpc_service_t(rpc_reg_i* mb_, uint16_t service_group_id_, uint16_t servie_id_);
     virtual ~rpc_service_t();
     uint16_t get_group_id() const;
     uint16_t get_id() const;
@@ -70,7 +70,7 @@ private:
     callback_map_t  m_callback_map;
     interface_map_t m_interface_map;
     void*           m_bind_service_ptr;
-    msg_bus_i*      m_msg_bus;
+    rpc_reg_i*      m_rpc_reg;
 };
 
 template<typename RET, typename MSGT, typename IN_MSG>

@@ -1,5 +1,5 @@
 #include "logic_service.h"
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 #include "common_msg_def.h"
 #include "logic_msg_def.h"
 #include "rpc/rpc_callback.h"

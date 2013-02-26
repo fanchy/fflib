@@ -6,11 +6,11 @@
 #include <string>
 using namespace std;
 
-#include "rpc/msg_bus.h"
+#include "rpc/ffrpc.h"
 
 namespace ff {
 
-class broker_service_t: public msg_bus_i
+class broker_service_t: public rpc_reg_i
 {
     struct socket_session_info_t
     {
