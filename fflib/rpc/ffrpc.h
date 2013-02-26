@@ -79,6 +79,6 @@ private:
     
     vector<socket_ptr_t>m_broker_slaves;
 };
-
+typedef ffrpc_t msg_bus_t;
 }
 #endif
