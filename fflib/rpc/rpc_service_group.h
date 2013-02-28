@@ -36,7 +36,7 @@ private:
     uint16_t            m_id;
     string              m_name;
     rpc_service_map_t   m_all_rpc_service;
-    ffrpc_t*          m_msg_bus;
+    ffrpc_t*            m_rpc;
 };
 
 

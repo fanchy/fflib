@@ -6,7 +6,7 @@ using namespace ff;
 rpc_service_group_t::rpc_service_group_t(ffrpc_t* mb_, const string& name_, uint16_t id_):
     m_id(id_),
     m_name(name_),
-    m_msg_bus(mb_)
+    m_rpc(mb_)
 {}
 
 rpc_service_group_t::~rpc_service_group_t()
@@ -54,8 +54,8 @@ rpc_service_t& rpc_service_group_t::create_service(uint16_t id_)
         }
     }
     
-    m_msg_bus->register_service(get_name(), get_id(), id_);
-    rpc_service_t* rs = new rpc_service_t(m_msg_bus, m_id, id_);
+    m_rpc->register_service(get_name(), get_id(), id_);
+    rpc_service_t* rs = new rpc_service_t(m_rpc, m_id, id_);
     this->add_service(id_, rs);
     return *rs;
 }

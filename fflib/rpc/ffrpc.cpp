@@ -69,7 +69,15 @@ rpc_service_group_t* ffrpc_t::get_service_group(const string& name_)
     }
     return NULL;
 }
-
+rpc_service_t* ffrpc_t::get_service(const string& name_, uint16_t index_)
+{
+    rpc_service_group_t* rsg = get_service_group(name_);
+    if (rsg)
+    {
+        return rsg->get_service(index_);
+    }
+    return NULL;
+}
 int ffrpc_t::handle_broken(socket_ptr_t sock_)
 {
     lock_guard_t lock(m_mutex);

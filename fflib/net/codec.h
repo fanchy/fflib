@@ -246,8 +246,11 @@ struct msg_name_store_t
     }
     void add_msg(const string& name_, uint16_t id_)
     {
-        m_name_to_id[name_] = id_;
-        m_id_to_name[id_]   = name_;
+        if (m_name_to_id.find(name_) == m_name_to_id.end() && m_id_to_name.find(id_) == m_id_to_name.end())
+        {
+            m_name_to_id[name_] = id_;
+            m_id_to_name[id_]   = name_;
+        }
     }
     uint16_t name_to_id(const string& name_)
     {
