@@ -18,7 +18,7 @@ using namespace std;
 #include "rpc/ffrpc.h"
 #include "base/time_tool.h"
 #include "net/msg_handler_i.h"
-
+#include "base/os_tool.h"
 
 #include "rapidjson/document.h"     // rapidjson's DOM-style API                                                                                             
 #include "rapidjson/prettywriter.h" // for stringify JSON
@@ -704,6 +704,64 @@ public:
         printf("http query param<%s>, convert to<%s>\n", msg_.get_body().c_str(), arg.c_str());
         
         vector<string> parse_ret;
+        if (arg == "/")//! 返回所有目录和文件
+        {
+            rapidjson::Document::AllocatorType allocator;
+            rapidjson::StringBuffer            str_buff;
+            json_value_t                       ret_json(rapidjson::kObjectType);
+
+            {
+                json_value_t tmp_val("", 0, allocator);
+                ret_json.AddMember("err_msg", tmp_val, allocator);
+            }
+            vector<string> year_dir;
+            vector<string> all_dir;
+            os_tool_t::ls(m_path.c_str(), year_dir);
+            for (size_t i = 0; i < year_dir.size(); ++i)
+            {
+                if (false == os_tool_t::is_dir(year_dir[i])) continue;
+                vector<string> ret;
+                os_tool_t::ls((m_path + year_dir[i]).c_str(), ret);
+                for (size_t j = 0; j < ret.size(); ++j)
+                {
+                    all_dir.push_back(m_path + year_dir[i] + "/" + ret[j]);
+                }
+            }
+            
+            {
+                json_value_t tmp_val(rapidjson::kArrayType);
+                {
+                    json_value_t v("date", 4, allocator);
+                    tmp_val.PushBack(v, allocator);
+                    json_value_t v2("dbname", 6, allocator);
+                    tmp_val.PushBack(v2, allocator);
+                }
+                ret_json.AddMember("col_names", tmp_val, allocator);
+            }
+            {
+                json_value_t data_array(rapidjson::kArrayType);
+                for (size_t i = 0; i < all_dir.size(); ++i)
+                {
+                    if (false == os_tool_t::is_dir(all_dir[i])) continue;
+                    json_value_t tmp_val(rapidjson::kArrayType);
+                    vector<string> ret;
+                    os_tool_t::ls((all_dir[i]).c_str(), ret);
+                    for (size_t j = 0; j < ret.size(); ++j)
+                    {
+                        json_value_t tmv(all_dir[i].c_str(), all_dir[i].length(), allocator);
+                        tmp_val.PushBack(tmv, allocator);
+                        json_value_t v(ret[j].c_str(), ret[j].length(), allocator);
+                        tmp_val.PushBack(v, allocator);
+                        data_array.PushBack(tmp_val, allocator);
+                    }
+                }
+                ret_json.AddMember("ret_data", data_array, allocator);
+            }
+            rapidjson::Writer<rapidjson::StringBuffer> writer(str_buff, &allocator);
+            ret_json.Accept(writer);
+            string output(str_buff.GetString(), str_buff.GetSize());
+            sock_->async_send(output);return 0;
+        }
         strtool_t::split(arg, parse_ret, "/");
         if (parse_ret.size() != 4)
         {
