@@ -536,7 +536,7 @@ public:
             m_thread.create_thread(task_binder_t::gen(&task_queue_t::run, m_all_tq[i]), 1);
         }
         
-        long dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
+        uint64_t dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
         m_timer_service.once_timer(dest_tm*1000, task_binder_t::gen(&ffcount_service_t::create_new_dir, this));
         return 0;
     }
@@ -667,7 +667,7 @@ public:
     }
     void create_new_dir()
     {
-        long dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
+        uint64_t dest_tm = time_tool_t::next_month() - ::time(NULL) + 1;
         m_timer_service.once_timer(dest_tm*1000, task_binder_t::gen(&ffcount_service_t::create_new_dir, this));
         lock_guard_t lock(m_mutex);
         for (table_info_map_t::iterator it = m_db_info.begin(); it != m_db_info.end(); ++it)

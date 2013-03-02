@@ -53,27 +53,29 @@ void rpc_service_t::async_call(gate_msg_tool_t& msg_, callback_wrapper_i* func_)
     uint16_t msg_id = singleton_t<msg_name_store_t>::instance().name_to_id(msg_.get_name());    
     this->async_call(msg_, msg_id, func_);
 }
-
-int rpc_service_t::interface_callback(uint32_t uuid_, const string& buff_)
+callback_wrapper_i* rpc_service_t::del_callback(uint32_t uuid_)
 {
-    logtrace((RPC, "rpc_service_t::interface_callback m_service_id[%u], uuid[%u]", m_service_id, uuid_));
     callback_map_t::iterator it = m_callback_map.find(uuid_);
     if (it != m_callback_map.end())
     {
-        it->second->callback(buff_);
-        
-        delete it->second;
+        callback_wrapper_i* ret = it->second;
         m_callback_map.erase(it);
-        return 0;
+        return ret;
     }
-    else
-    {
-        logerror((RPC, "rpc_service_t::interface_callback none uuid_[%u]", uuid_));
-    }
-    return -1;
+    return NULL;
 }
 
-int rpc_service_t::call_interface(uint32_t interface_name_, const string& msg_buff_, socket_ptr_t socket_)
+msg_process_func_i* rpc_service_t::get_interface_func(uint32_t interface_id_)
+{
+    interface_map_t::const_iterator it = m_interface_map.find(interface_id_);
+    if (it != m_interface_map.end())
+    {
+        return it->second;
+    }
+    return NULL;
+}
+
+int rpc_service_t::call_interface(msg_process_func_i* func_, const string& msg_buff_, socket_ptr_t socket_)
 {
     rpc_callcack_base_t rcb;
     rcb.set_cmd(rpc_msg_cmd_e::INTREFACE_CALLBACK);
@@ -81,14 +83,11 @@ int rpc_service_t::call_interface(uint32_t interface_name_, const string& msg_bu
 
     try
     {
-        interface_map_t::const_iterator it = m_interface_map.find(interface_name_);
-        if (it != m_interface_map.end())
+        if (func_)
         {
-            it->second->exe(msg_buff_, rpc_msg_cmd_e::INTREFACE_CALLBACK, socket_);
+            func_->exe(msg_buff_, rpc_msg_cmd_e::INTREFACE_CALLBACK, socket_);
             return 0;
         }
-
-        logerror((RPC, "rpc_service_t::call_interface none msg id[%u]", interface_name_));
         rcb.exe("interface not existed");
     }
     catch (exception& e_)

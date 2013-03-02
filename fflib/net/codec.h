@@ -11,6 +11,8 @@ using namespace std;
 
 #include "message.h"
 #include "base/singleton.h"
+#include "base/atomic_op.h"
+#include "base/lock.h"
 
 namespace ff {
 
@@ -222,40 +224,68 @@ struct rpc_msg_cmd_e
 
 struct msg_name_store_t
 {
-    msg_name_store_t()
+    struct data_t
     {
-        this->add_msg("create_service_group_t::in_t", rpc_msg_cmd_e::CREATE_SERVICE_GROUP);
-        this->add_msg("create_service_group_t::out_t", rpc_msg_cmd_e::CREATE_SERVICE_GROUP_RET);
-        this->add_msg("create_service_t::in_t", rpc_msg_cmd_e::CREATE_SERVICE);
-        this->add_msg("create_service_t::out_t", rpc_msg_cmd_e::CREATE_SERVICE_RET);
-        this->add_msg("reg_interface_t::in_t", rpc_msg_cmd_e::REG_INTERFACE);
-        this->add_msg("reg_interface_t::out_t", rpc_msg_cmd_e::REG_INTERFACE_RET);
-        this->add_msg("sync_all_service_t::in_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE);
-        this->add_msg("sync_all_service_t::out_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE_RET);
-        this->add_msg("push_add_service_group_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE_GROUP);
-        this->add_msg("push_add_service_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE);
-        this->add_msg("push_add_msg_t::in_t", rpc_msg_cmd_e::PUSH_ADD_MSG);
-        this->add_msg("reg_slave_broker_t::in_t", rpc_msg_cmd_e::REG_SLAVE_BROKER);
+        string                m_null_str;
+        map<string, uint16_t> m_name_to_id;
+        map<uint16_t, string> m_id_to_name;
+    };
+    msg_name_store_t():
+        m_data(new data_t())
+    {
+        m_data_history.push_back(m_data);
+        this->set_msg_name2id(m_data, "create_service_group_t::in_t", rpc_msg_cmd_e::CREATE_SERVICE_GROUP);
+        this->set_msg_name2id(m_data, "create_service_group_t::out_t", rpc_msg_cmd_e::CREATE_SERVICE_GROUP_RET);
+        this->set_msg_name2id(m_data, "create_service_t::in_t", rpc_msg_cmd_e::CREATE_SERVICE);
+        this->set_msg_name2id(m_data, "create_service_t::out_t", rpc_msg_cmd_e::CREATE_SERVICE_RET);
+        this->set_msg_name2id(m_data, "reg_interface_t::in_t", rpc_msg_cmd_e::REG_INTERFACE);
+        this->set_msg_name2id(m_data, "reg_interface_t::out_t", rpc_msg_cmd_e::REG_INTERFACE_RET);
+        this->set_msg_name2id(m_data, "sync_all_service_t::in_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE);
+        this->set_msg_name2id(m_data, "sync_all_service_t::out_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE_RET);
+        this->set_msg_name2id(m_data, "push_add_service_group_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE_GROUP);
+        this->set_msg_name2id(m_data, "push_add_service_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE);
+        this->set_msg_name2id(m_data, "push_set_msg_name2id_t::in_t", rpc_msg_cmd_e::PUSH_ADD_MSG);
+        this->set_msg_name2id(m_data, "reg_slave_broker_t::in_t", rpc_msg_cmd_e::REG_SLAVE_BROKER);
     }
-    
+    ~msg_name_store_t()
+    {
+        for (size_t i = 0; i < m_data_history.size(); ++i)
+        {
+            delete m_data_history[i];
+        }
+        m_data_history.clear();
+    }
     template<typename MSG>
     void add_msg(uint16_t id_)
     {
         MSG tmp;
         this->add_msg(tmp.get_name(), id_);
     }
+    void set_msg_name2id(data_t* data_, const string& name_, uint16_t id_)
+    {
+        data_->m_name_to_id[name_] = id_;
+        data_->m_id_to_name[id_]   = name_;
+    }
     void add_msg(const string& name_, uint16_t id_)
     {
-        if (m_name_to_id.find(name_) == m_name_to_id.end() && m_id_to_name.find(id_) == m_id_to_name.end())
+        data_t* pdata = ATOMIC_FETCH(&m_data);
+        if (pdata->m_name_to_id.find(name_) != pdata->m_name_to_id.end())
         {
-            m_name_to_id[name_] = id_;
-            m_id_to_name[id_]   = name_;
+            return;
         }
+        data_t* new_data = new data_t();
+        new_data->m_name_to_id = pdata->m_name_to_id;
+        new_data->m_id_to_name = pdata->m_id_to_name;
+        this->set_msg_name2id(new_data, name_, id_);
+        ATOMIC_SET(&m_data, new_data);
+        lock_guard_t lock(m_mutex);
+        m_data_history.push_back(new_data);
     }
     uint16_t name_to_id(const string& name_)
     {
-        map<string, uint16_t>::iterator it = m_name_to_id.find(name_);
-        if (it != m_name_to_id.end())
+        data_t* pdata = ATOMIC_FETCH(&m_data);
+        map<string, uint16_t>::iterator it = pdata->m_name_to_id.find(name_);
+        if (it != pdata->m_name_to_id.end())
         {
             return it ->second;
         }
@@ -263,11 +293,22 @@ struct msg_name_store_t
     }
     const string& id_to_name(uint16_t id_)
     {
-        return m_id_to_name[id_];
+        data_t* pdata = ATOMIC_FETCH(&m_data);
+        map<uint16_t, string>::iterator it = pdata->m_id_to_name.find(id_);
+        if (it != pdata->m_id_to_name.end())
+        {
+            return it ->second;
+        }
+        return pdata->m_null_str;
     }
-    map<string, uint16_t>& all_msg() { return m_name_to_id; }
-    map<string, uint16_t> m_name_to_id;
-    map<uint16_t, string> m_id_to_name;
+    map<string, uint16_t>& all_msg()
+    {
+        data_t* pdata = ATOMIC_FETCH(&m_data);
+        return pdata->m_name_to_id;
+    }
+    data_t*             m_data;
+    vector<data_t*>     m_data_history;
+    mutex_t             m_mutex;
 };
 
 template<typename T>

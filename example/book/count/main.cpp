@@ -27,7 +27,6 @@ int main(int argc, char* argv[])
     ffcount_service_t ffcount_service;
     ffcount_service.start();
     
-    ffrpc.create_service_group("event_log_service");
     ffrpc.create_service("event_log_service", 0)
             .bind_service(&ffcount_service)
             .reg(&ffcount_service_t::save_event)

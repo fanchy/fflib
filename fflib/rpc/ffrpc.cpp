@@ -92,7 +92,6 @@ int ffrpc_t::handle_broken(socket_ptr_t sock_)
 
 int ffrpc_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
 {
-    lock_guard_t lock(m_mutex);
     msg_tool_t msg_tool;
 
     try
@@ -103,6 +102,7 @@ int ffrpc_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
                             msg_.get_cmd(), msg_tool.get_name().c_str(),
                             msg_tool.get_group_id(), msg_tool.get_service_id()));
 
+        lock_guard_t lock(m_mutex);
         if (msg_tool.get_group_id() == 0 && msg_tool.get_service_id() == 0)
         {
             switch (msg_tool.get_msg_id())
@@ -129,7 +129,9 @@ int ffrpc_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
                 }break;
                 default:
                 {
-                    m_broker_service->interface_callback(msg_tool.get_uuid(), msg_.get_body());                    
+                    rpc_service_t::callback_guard_t cb(m_broker_service->del_callback(msg_tool.get_uuid()));
+                    lock.unlock();
+                    cb.exe(msg_.get_body());                 
                 }break;
             }
 
@@ -156,11 +158,15 @@ int ffrpc_t::handle_msg(const message_t& msg_, socket_ptr_t sock_)
 
         if (rpc_msg_cmd_e::CALL_INTERFACE == msg_.get_cmd())
         {
-            rs->call_interface(msg_tool.get_msg_id(), msg_.get_body(), sock_);
+            msg_process_func_i* func = rs->get_interface_func(msg_tool.get_msg_id());
+            lock.unlock();
+            rs->call_interface(func, msg_.get_body(), sock_);
         }
         else if (rpc_msg_cmd_e::INTREFACE_CALLBACK == msg_.get_cmd())
         {
-            rs->interface_callback(msg_tool.get_uuid(), msg_.get_body());
+            rpc_service_t::callback_guard_t cb(rs->del_callback(msg_tool.get_uuid()));
+            lock.unlock();
+            cb.exe(msg_.get_body());
         }
         else
         {

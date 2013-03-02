@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include <list>
 #include <map>
@@ -38,15 +39,15 @@ class timer_service_t
     };
     struct registered_info_t
     {
-        registered_info_t(long ms_, long dest_ms_, const task_t& t_, bool is_loop_):
+        registered_info_t(uint64_t ms_, uint64_t dest_ms_, const task_t& t_, bool is_loop_):
             timeout(ms_),
             dest_tm(dest_ms_),
             callback(t_),
             is_loop(is_loop_)
         {}
-        bool is_timeout(long cur_ms_)       { return dest_tm <= cur_ms_; }
-        long    timeout;
-        long    dest_tm;
+        bool is_timeout(uint64_t cur_ms_)       { return dest_tm <= cur_ms_; }
+        uint64_t    timeout;
+        uint64_t    dest_tm;
         task_t  callback;
         bool    is_loop;
     };
@@ -80,25 +81,25 @@ public:
         m_thread.join();
     }
 
-    void loop_timer(long ms_, task_t func)
+    void loop_timer(uint64_t ms_, task_t func)
     {
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        long   dest_ms = tv.tv_sec*1000 + tv.tv_usec / 1000 + ms_;
+        uint64_t   dest_ms = tv.tv_sec*1000 + tv.tv_usec / 1000 + ms_;
 
         lock_guard_t lock(m_mutex);
         m_tmp_register_list.push_back(registered_info_t(ms_, dest_ms, func, true));
     }
-    void once_timer(long ms_, task_t func)
+    void once_timer(uint64_t ms_, task_t func)
     {
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        long   dest_ms = tv.tv_sec*1000 + tv.tv_usec / 1000 + ms_;
+        uint64_t   dest_ms = tv.tv_sec*1000 + tv.tv_usec / 1000 + ms_;
         
         lock_guard_t lock(m_mutex);
         m_tmp_register_list.push_back(registered_info_t(ms_, dest_ms, func, false));
     }
-    void timer_callback(long ms_, task_t func)
+    void timer_callback(uint64_t ms_, task_t func)
     {
         once_timer(ms_, func);
     }
@@ -120,7 +121,7 @@ public:
             }
             
             gettimeofday(&tv, NULL);
-            long cur_ms = tv.tv_sec*1000 + tv.tv_usec / 1000;
+            uint64_t cur_ms = tv.tv_sec*1000 + tv.tv_usec / 1000;
             
             add_new_timer();
             process_timer_callback(cur_ms);
@@ -147,7 +148,7 @@ private:
         
         ::epoll_ctl(m_efd, EPOLL_CTL_ADD, m_interupt_info.read_fd(), &ev);
     }
-    void process_timer_callback(long now_)
+    void process_timer_callback(uint64_t now_)
     {
         registered_info_map_t::iterator it_begin = m_registered_store.begin();
         registered_info_map_t::iterator it       = it_begin;

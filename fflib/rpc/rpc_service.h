@@ -24,9 +24,38 @@ struct callback_null_t
 
 class rpc_service_t
 {
+public:
     typedef map<uint32_t, callback_wrapper_i*>      callback_map_t;
     typedef map<uint32_t, msg_process_func_i*>      interface_map_t;
 
+    struct callback_guard_t
+    {
+        callback_guard_t(callback_wrapper_i* f_):
+            cb(f_)
+        {}
+        ~callback_guard_t()
+        {
+            delete cb;
+        }
+        int exe(const string& buff_)
+        {
+            try
+            {
+                if (cb)
+                {
+                    cb->callback(buff_);
+                    return 0;
+                }
+            }
+            catch(exception& e_)
+            {
+                return -1;
+            }
+            return -1;
+        }
+        
+        callback_wrapper_i* cb;
+    };
 public:
     rpc_service_t(rpc_reg_i* mb_, uint16_t service_group_id_, uint16_t servie_id_);
     virtual ~rpc_service_t();
@@ -55,9 +84,11 @@ public:
     template <typename IN_MSG, typename RET, typename T, typename OUT_MSG>
     rpc_service_t& reg(RET (T::*interface_)(IN_MSG&, rpc_callcack_t<OUT_MSG>&)) { return reg(interface_, (T*)m_bind_service_ptr); }
 
-    int interface_callback(uint32_t uuid_, const string& buff_);
-    int call_interface(uint32_t interface_name_, const string& msg_buff_, socket_ptr_t sock_);
+    callback_wrapper_i* del_callback(uint32_t uuid_);
 
+    msg_process_func_i* get_interface_func(uint32_t interface_id_);
+    int call_interface(msg_process_func_i* func_, const string& msg_buff_, socket_ptr_t sock_);
+    
     virtual socket_ptr_t get_socket() const;
 
 private:

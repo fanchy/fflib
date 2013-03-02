@@ -44,40 +44,55 @@ public:
     template<typename T>
     int async_call(const string& service_name_, int index_, T& msg)
     {
-        rpc_service_group_t* rsg = get_service_group(service_name_);
-        if (rsg)
+        rpc_service_t* rs = NULL;
         {
-            rpc_service_t* rs = rsg->get_service(index_);
-            if (rs)
+            lock_guard_t lock(m_mutex);
+            rpc_service_group_t* rsg = get_service_group(service_name_);
+            if (rsg)
             {
-                rs->async_call(msg);
-                return 0;
+                rs = rsg->get_service(index_);
             }
+        }
+        if (rs)
+        {
+            rs->async_call(msg);
+            return 0;
         }
         return -1;
     }
     template<typename T, typename R>
     int async_call(const string& service_name_, int index_, T& msg, R cb_)
     {
-        rpc_service_group_t* rsg = get_service_group(service_name_);
-        if (rsg)
+        rpc_service_t* rs = NULL;
         {
-            rpc_service_t* rs = rsg->get_service(index_);
-            if (rs)
+            lock_guard_t lock(m_mutex);
+            rpc_service_group_t* rsg = get_service_group(service_name_);
+            if (rsg)
             {
-                rs->async_call(msg, cb_);
-                return 0;
+                rs = rsg->get_service(index_);
             }
+        }
+        if (rs)
+        {
+            rs->async_call(msg, cb_);
+            return 0;
         }
         return -1;
     }
     template<typename T, typename R>
     int call(const string& service_name_, int index_, T& msg, R& dest_)
     {
-        rpc_service_group_t* rsg = get_service_group(service_name_);
-        if (rsg)
+        rpc_service_t* rs = NULL;
         {
-            rpc_service_t* rs = rsg->get_service(index_);
+            lock_guard_t lock(m_mutex);
+            rpc_service_group_t* rsg = get_service_group(service_name_);
+            if (rsg)
+            {
+                rs = rsg->get_service(index_);
+            }
+        }
+        if (rs)
+        {
             rpc_future_t<R> rpc_future;
             dest_ = rpc_future.call(rs, msg);
             return 0;
