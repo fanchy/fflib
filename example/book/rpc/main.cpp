@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
 {
     if (argc == 1)
     {
-        printf("usage: app -broker -l tcp://127.0.0.1:10241 -service db_service@1-4,logic_service@1-4\n");
+        printf("usage: app -broker -client -l tcp://127.0.0.1:10241 -service db_service@1-4,logic_service@1-4\n");
         return 1;
     }
     arg_helper_t arg_helper(argc, argv);
@@ -178,23 +178,26 @@ int main(int argc, char* argv[])
         }
     }
     
-    ffrpc_t ffrpc;
-    for (int i = 1; i < 100000; ++i)
+    if (arg_helper.is_enable_option("-client"))
     {
-        sleep(1);
-        printf("client 准备调用logic_service[index=%d]\n", i);
-        
-        assert(0 == ffrpc.open(arg_helper.get_option_value("-l")) && "can't connnect to broker");
-        
-        test_msg_t::in_t in;
-        in.uid = i;
+        ffrpc_t ffrpc;
+        for (int i = 1; i < 100000; ++i)
+        {
+            sleep(1);
+            printf("client 准备调用logic_service[index=%d]\n", i);
 
-        test_msg_t::out_t out;
-        ffrpc.call("logic_service", 1 + in.uid % ffrpc.service_num("logic_service"), in, out);
-        sleep(8);
-        printf("logic_service[index=%d] 调用返回=%d\n", i, out.value);
+            assert(0 == ffrpc.open(arg_helper.get_option_value("-l")) && "can't connnect to broker");
+
+            test_msg_t::in_t in;
+            in.uid = i;
+
+            test_msg_t::out_t out;
+            ffrpc.call("logic_service", 1 + in.uid % ffrpc.service_num("logic_service"), in, out);
+            sleep(8);
+            printf("logic_service[index=%d] 调用返回=%d\n", i, out.value);
+        }
+        ffrpc.close();
     }
-    ffrpc.close();
     signal_helper_t::wait();
     for (size_t i = 0; i < vt_rpc.size(); ++i)
     {
