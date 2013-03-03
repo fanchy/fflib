@@ -15,7 +15,7 @@ class thread_t
     static void* thread_func(void* p_);
 
 public:
-    int create_thread(task_t func, int num);
+    int create_thread(task_t func, int num = 1);
     int join();
 
 private:

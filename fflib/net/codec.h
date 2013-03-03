@@ -9,10 +9,11 @@
 #include <map>
 using namespace std;
 
-#include "message.h"
+#include "net/message.h"
 #include "base/singleton.h"
 #include "base/atomic_op.h"
 #include "base/lock.h"
+#include "base/type_i.h"
 
 namespace ff {
 
@@ -215,10 +216,11 @@ struct rpc_msg_cmd_e
         CALL_INTERFACE_RET       = 10,
         INTREFACE_CALLBACK       = 11,
         INTREFACE_CALLBACK_RE    = 12,
-        PUSH_ADD_SERVICE_GROUP   = 13,
-        PUSH_ADD_SERVICE         = 14,
-        PUSH_ADD_MSG             = 15,
-        REG_SLAVE_BROKER         = 16
+        PUSH_INIT_DATA           = 13,
+        PUSH_ADD_SERVICE_GROUP   = 14,
+        PUSH_ADD_SERVICE         = 15,
+        PUSH_ADD_MSG             = 16,
+        REG_SLAVE_BROKER         = 17
     };
 };
 
@@ -242,6 +244,7 @@ struct msg_name_store_t
         this->set_msg_name2id(m_data, "reg_interface_t::out_t", rpc_msg_cmd_e::REG_INTERFACE_RET);
         this->set_msg_name2id(m_data, "sync_all_service_t::in_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE);
         this->set_msg_name2id(m_data, "sync_all_service_t::out_t", rpc_msg_cmd_e::SYNC_ALL_SERVICE_RET);
+        this->set_msg_name2id(m_data, "push_init_data_t::in_t", rpc_msg_cmd_e::PUSH_INIT_DATA);
         this->set_msg_name2id(m_data, "push_add_service_group_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE_GROUP);
         this->set_msg_name2id(m_data, "push_add_service_t::in_t", rpc_msg_cmd_e::PUSH_ADD_SERVICE);
         this->set_msg_name2id(m_data, "push_set_msg_name2id_t::in_t", rpc_msg_cmd_e::PUSH_ADD_MSG);
@@ -580,21 +583,6 @@ struct reg_interface_t
 
 struct sync_all_service_t
 {
-    struct id_info_t//: public codec_helper_i
-    {
-        /*virtual void encode(bin_encoder_t& be_) const
-        {
-            be_ << sgid << sid << node_id;
-        }
-        virtual void decode(bin_decoder_t& bd_)
-        {
-            bd_ >> sgid >> sid >> node_id;
-        }*/
-        uint16_t sgid;
-        uint16_t sid;
-        uint16_t node_id;
-    };
-
     struct in_t: public msg_i
     {
         in_t():
@@ -611,10 +599,32 @@ struct sync_all_service_t
 
         string slave_host;
     };
-    struct out_t: public msg_i
+    struct out_t: public bool_ret_msg_t
     {
-        out_t():
-            msg_i("sync_all_service_t::out_t")
+        out_t(): bool_ret_msg_t("sync_all_service_t::out_t"){}
+    };
+};
+
+struct push_init_data_t
+{
+    struct id_info_t//: public codec_helper_i
+    {
+        /*virtual void encode(bin_encoder_t& be_) const
+        {
+            be_ << sgid << sid << node_id;
+        }
+        virtual void decode(bin_decoder_t& bd_)
+        {
+            bd_ >> sgid >> sid >> node_id;
+        }*/
+        uint16_t sgid;
+        uint16_t sid;
+        uint16_t node_id;
+    };
+    struct in_t: public msg_i
+    {
+        in_t():
+            msg_i("push_init_data_t::in_t")
         {}
         virtual string encode()
         {
@@ -637,7 +647,7 @@ struct sync_all_service_t
         vector<string>      broker_slave_host;
     };
 };
-
+        
 struct push_add_service_group_t
 {
     struct in_t: public msg_i
@@ -717,6 +727,18 @@ struct reg_slave_broker_t
         uint16_t    node_id;
     };
 };
+
+template<typename T>
+class ffmsg_t: public msg_i
+{
+public:
+    ffmsg_t():
+        msg_i(TYPE_NAME(T).c_str())
+    {}
+    virtual ~ffmsg_t(){}
+};
+
+typedef bool_ret_msg_t ffmsg_bool_t;
 }
 
 #endif

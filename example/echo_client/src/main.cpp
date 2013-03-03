@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
         {
             if (g_count % 5000 == 0)
             {
-                loginfo((FF, "%d, index[%d] echo callback msg value<%s>", g_index, g_count, msg_.value.c_str()));
+                logwarn((FF, "%d, index[%d] echo callback msg value<%s>", g_index, g_count, msg_.value.c_str()));
             }
 
             if (++g_count > 500000) {

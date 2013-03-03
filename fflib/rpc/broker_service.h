@@ -74,6 +74,8 @@ public:
     virtual socket_ptr_t get_socket(const rpc_service_t* rs_);
     
     socket_ptr_t find_socket_by_node(uint16_t node_id_);
+    
+    int process_sync_data(push_init_data_t::in_t& out);
 private:
     mutex_t             m_mutex;
     service_obj_map_t   m_service_obj_mgr;

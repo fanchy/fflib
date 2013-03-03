@@ -32,7 +32,8 @@ public:
     
     int handle_broken(socket_ptr_t sock_);
     int handle_msg(const message_t& msg_, socket_ptr_t sock_);
-
+    int process_sync_data(push_init_data_t::in_t& out);
+    
     int open(const string& host_);
     int close();
     
@@ -100,6 +101,16 @@ public:
         return -1;
     }
 
+    size_t service_num(const string& service_name_)
+    {
+        lock_guard_t lock(m_mutex);
+        rpc_service_group_t* rsg = get_service_group(service_name_);
+        if (rsg)
+        {
+            return rsg->size();
+        }
+        return 0;
+    }
 private:
     mutex_t             m_mutex;
     uint32_t            m_uuid;
@@ -108,6 +119,8 @@ private:
     socket_ptr_t        m_socket;
     
     vector<socket_ptr_t>m_broker_slaves;
+    //! 记录曾经使用过的broker连接
+    vector<socket_ptr_t>m_history_sockets;
 };
 typedef ffrpc_t msg_bus_t;
 }
