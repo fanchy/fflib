@@ -154,6 +154,10 @@ bool shared_ptr_t<T>::operator==(const object_t* p)
 template<typename T>
 typename shared_ptr_t<T>::self_type_t& shared_ptr_t<T>::operator=(const self_type_t& src_)
 {
+    if (&src_ == this)
+    {
+        return *this;
+    }
     reset();
     m_dest_ptr = src_.get();
     m_ref_data = src_.ger_ref_count();
@@ -252,6 +256,10 @@ public:
     }
     self_type_t& operator=(const self_type_t& p)
     {
+        if (&p == this)
+        {
+            return *this;
+        }
         reset();
         m_dest_ptr = p.get();
         m_ref_data = p.ger_ref_count();

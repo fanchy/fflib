@@ -1,6 +1,6 @@
 
-#ifndef _FF_TYPE_I_
-#define _FF_TYPE_I_
+#ifndef _FF_TYPE_H_
+#define _FF_TYPE_H_
 
 #include "base/singleton.h"
 #include "base/lock.h"
@@ -18,17 +18,7 @@ namespace ff
 #define TYPE_NAME(X)           singleton_t<type_helper_t<X> >::instance().get_type_name()
 #define TYPE_NAME_TO_ID(name_) singleton_t<type_id_generator_t>::instance().get_id_by_name(name_)
 
-class type_i
-{
-public:
-    virtual ~ type_i(){}
-    virtual int get_type_id() const { return -1; }
-    virtual const string& get_type_name() const {static string foo; return foo; }
     
-    virtual void   decode(const string& data_) {}
-    virtual string encode()                    { return "";} 
-};
-
 struct type_id_generator_t
 {
     type_id_generator_t():m_id(0){}
@@ -52,7 +42,7 @@ struct type_id_generator_t
     int              m_id;
     map<string, int> m_name2id;
 };
-    
+
 template<typename T>
 struct type_helper_t
 {
@@ -75,6 +65,28 @@ struct type_helper_t
     int     m_type_id;
     string  m_type_name;
 };
+
+class type_i
+{
+public:
+    virtual ~ type_i(){}
+    virtual int get_type_id() const { return -1; }
+    virtual const string& get_type_name() const {static string foo; return foo; }
+    
+    virtual void   decode(const string& data_) {}
+    virtual string encode()                    { return "";} 
+    
+    template<typename T>
+    T* cast()
+    {
+        if (get_type_id() == TYPEID(T))
+        {
+            return (T*)this;
+        }
+        return NULL;
+    }
+};
+
 
 template<typename SUPERT, typename T>
 class auto_type_t: public SUPERT
@@ -100,7 +112,7 @@ public:
     void dec(int n) { __sync_sub_and_fetch(&m_ref_count, n); 	   }
     long val() const{ return m_ref_count; 						   }
 
-    virtual string& get_name() { static string ret; return ret; }
+    virtual const string& get_name() { static string ret; return ret; }
 protected:
     volatile long m_ref_count;
 };
@@ -157,15 +169,16 @@ protected:
 template<typename T>
 class obj_counter_t: public obj_counter_i
 {
+public:
     obj_counter_t()
     {
-        singleton_t<obj_counter_t<T> >::instance().reg(this);
+        singleton_t<obj_counter_summary_t>::instance().reg(this);
     }
-    virtual string get_name() { return TYPE_NAME(T); }
+    virtual const string& get_name() { return TYPE_NAME(T); }
 };
 
 template<typename T>
-class fftype_t
+class fftype_t: public type_i
 {
 public:
     fftype_t()
