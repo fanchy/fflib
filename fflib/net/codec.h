@@ -13,7 +13,7 @@ using namespace std;
 #include "base/singleton.h"
 #include "base/atomic_op.h"
 #include "base/lock.h"
-#include "base/type_i.h"
+#include "base/fftype.h"
 
 namespace ff {
 

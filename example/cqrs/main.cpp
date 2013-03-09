@@ -7,7 +7,7 @@ using namespace std;
 #include "command/task_command.h"
 #include "task/task_service.h"
 #include "task/test_task.h"
-#include  "base/obj_tool.h"
+#include  "base/fftype.h"
 using namespace ff;
 
 #include "gtest/gtest.h"

@@ -2,7 +2,6 @@
 #define _FF_OBJ_TOOL_H_
 
 #include "base/singleton.h"
-#include "base/type_i.h"
 
 #include <list>
 #include <map>

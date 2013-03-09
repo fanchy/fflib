@@ -4,6 +4,9 @@
 
 #include "base/singleton.h"
 #include "base/lock.h"
+
+#include <list>
+#include <fstream>
 #include <string>
 #include <map>
 using namespace std;

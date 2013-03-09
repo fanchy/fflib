@@ -2,7 +2,7 @@
 #ifndef _FF_EVENT_I_
 #define _FF_EVENT_I_
 
-#include "base/type_i.h"
+#include "base/fftype.h"
 
 namespace ff
 {
