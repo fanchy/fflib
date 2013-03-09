@@ -1,0 +1,187 @@
+
+#ifndef _FF_TYPE_I_
+#define _FF_TYPE_I_
+
+#include "base/singleton.h"
+#include "base/lock.h"
+#include <string>
+#include <map>
+using namespace std;
+
+namespace ff
+{
+    
+#define TYPEID(X)              singleton_t<type_helper_t<X> >::instance().id()
+#define TYPE_NAME(X)           singleton_t<type_helper_t<X> >::instance().get_type_name()
+#define TYPE_NAME_TO_ID(name_) singleton_t<type_id_generator_t>::instance().get_id_by_name(name_)
+
+class type_i
+{
+public:
+    virtual ~ type_i(){}
+    virtual int get_type_id() const { return -1; }
+    virtual const string& get_type_name() const {static string foo; return foo; }
+    
+    virtual void   decode(const string& data_) {}
+    virtual string encode()                    { return "";} 
+};
+
+struct type_id_generator_t
+{
+    type_id_generator_t():m_id(0){}
+    int alloc_id(const string& name_)
+    {
+        lock_guard_t lock(m_mutex);
+        int id = ++ m_id;
+        m_name2id[name_] = id;
+        return id;
+    }
+    int get_id_by_name(const string& name_) const
+    {
+        map<string, int>::const_iterator it = m_name2id.find(name_);
+        if (it != m_name2id.end())
+        {
+            return it->second;
+        }
+        return 0;
+    }
+    mutex_t          m_mutex;
+    int              m_id;
+    map<string, int> m_name2id;
+};
+    
+template<typename T>
+struct type_helper_t
+{
+    type_helper_t():
+        m_type_id(0)
+    {
+        string tmp  = __PRETTY_FUNCTION__;
+        int pos     = tmp.find("type_helper_t() [with T = ");
+        m_type_name = tmp.substr(pos + 26, tmp.size() - 26 - pos - 1);
+        m_type_id   = singleton_t<type_id_generator_t>::instance().alloc_id(m_type_name);
+    }
+    int id() const
+    {
+        return m_type_id;
+    }
+    const string& get_type_name() const
+    {
+        return m_type_name;
+    }
+    int     m_type_id;
+    string  m_type_name;
+};
+
+template<typename SUPERT, typename T>
+class auto_type_t: public SUPERT
+{
+public:
+    virtual ~ auto_type_t(){}
+    virtual int get_type_id() const
+    {
+        return TYPEID(T);
+    }
+    virtual const string& get_type_name() const
+    {
+        return TYPE_NAME(T);
+    }
+};
+
+class obj_counter_i
+{
+public:
+    obj_counter_i():m_ref_count(0){}
+    virtual ~ obj_counter_i(){}
+    void inc(int n) { (void)__sync_add_and_fetch(&m_ref_count, n); }
+    void dec(int n) { __sync_sub_and_fetch(&m_ref_count, n); 	   }
+    long val() const{ return m_ref_count; 						   }
+
+    virtual string& get_name() { static string ret; return ret; }
+protected:
+    volatile long m_ref_count;
+};
+
+class obj_counter_summary_t
+{
+public:
+    void reg(obj_counter_i* p)
+    {
+        m_all_counter.push_back(p);
+    }
+
+    map<string, long> get_all_obj_num()
+    {
+        map<string, long> ret;
+        for (list<obj_counter_i*>::iterator it = m_all_counter.begin(); it != m_all_counter.end(); ++it)
+        {
+            ret.insert(make_pair((*it)->get_name(), (*it)->val()));
+        }
+        return ret;
+    }
+
+    void dump(const string& path_)
+    {
+        ofstream tmp_fstream;
+        tmp_fstream.open(path_.c_str());
+        map<string, long> ret = get_all_obj_num();
+        map<string, long>::iterator it = ret.begin();
+
+        time_t timep   = time(NULL);
+        struct tm *tmp = localtime(&timep);
+
+        char tmp_buff[256];
+        sprintf(tmp_buff, "%04d%02d%02d-%02d:%02d:%02d",
+                        tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
+                        tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
+        char buff[1024] = {0};
+
+        snprintf(buff, sizeof(buff), "obj,num,%s\n", tmp_buff);
+        tmp_fstream << buff;
+
+        for (; it != ret.end(); ++it)
+        {
+            snprintf(buff, sizeof(buff), "%s,%ld\n", it->first.c_str(), it->second);
+            tmp_fstream << buff;
+        }
+
+        tmp_fstream.flush();
+    }
+protected:
+    list<obj_counter_i*>	m_all_counter;
+};
+
+template<typename T>
+class obj_counter_t: public obj_counter_i
+{
+    obj_counter_t()
+    {
+        singleton_t<obj_counter_t<T> >::instance().reg(this);
+    }
+    virtual string get_name() { return TYPE_NAME(T); }
+};
+
+template<typename T>
+class fftype_t
+{
+public:
+    fftype_t()
+    {
+        singleton_t<obj_counter_t<T> >::instance().inc(1);
+    }
+    virtual ~ fftype_t()
+    {
+        singleton_t<obj_counter_t<T> >::instance().dec(1);
+    }
+    virtual int get_type_id() const
+    {
+        return TYPEID(T);
+    }
+    virtual const string& get_type_name() const
+    {
+        return TYPE_NAME(T);
+    }
+};
+
+}
+#endif

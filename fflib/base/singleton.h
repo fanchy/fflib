@@ -14,24 +14,28 @@ public:
         return *m_instance;
     }
 
+    static T* instance_ptr()
+    {
+        return m_instance;
+    }
 private:
-	static void init()
-	{
-		m_instance = new T();
-		atexit(destroy);
-	}
-	static void destroy()
-	{
-		if(m_instance)
-		{
-			delete m_instance;
-			m_instance = 0;
-		}
-	}
+    static void init()
+    {
+        m_instance = new T();
+        atexit(destroy);
+    }
+    static void destroy()
+    {
+        if(m_instance)
+        {
+                delete m_instance;
+                m_instance = 0;
+        }
+    }
 
 private:
-	static T* volatile m_instance;
-	static pthread_once_t m_ponce;
+    static T* volatile m_instance;
+    static pthread_once_t m_ponce;
 };
 
 template<class T>
