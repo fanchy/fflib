@@ -4,7 +4,7 @@ using namespace ff;
 
 #include <stdio.h>
 
-struct monster_t
+struct monster_t: public fftype_t<monster_t>
 {
     monster_t():
         ffstate_machine(this)
@@ -88,6 +88,7 @@ int main(int argc, char* argv[])
         event_C_t event;
         monster.ffstate_machine.handle(event);
         monster.ffstate_machine.update();
+        singleton_t<obj_summary_t>::instance().dump("./obj.txt");
     }
     return 0;
 }

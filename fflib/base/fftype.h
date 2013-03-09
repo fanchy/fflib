@@ -117,16 +117,18 @@ protected:
     volatile long m_ref_count;
 };
 
-class obj_counter_summary_t
+class obj_summary_t
 {
 public:
     void reg(obj_counter_i* p)
     {
+        lock_guard_t lock(m_mutex);
         m_all_counter.push_back(p);
     }
 
     map<string, long> get_all_obj_num()
     {
+        lock_guard_t lock(m_mutex);
         map<string, long> ret;
         for (list<obj_counter_i*>::iterator it = m_all_counter.begin(); it != m_all_counter.end(); ++it)
         {
@@ -138,7 +140,7 @@ public:
     void dump(const string& path_)
     {
         ofstream tmp_fstream;
-        tmp_fstream.open(path_.c_str());
+        tmp_fstream.open(path_.c_str(), ios::app);
         map<string, long> ret = get_all_obj_num();
         map<string, long>::iterator it = ret.begin();
 
@@ -151,18 +153,18 @@ public:
                         tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
         char buff[1024] = {0};
 
-        snprintf(buff, sizeof(buff), "obj,num,%s\n", tmp_buff);
-        tmp_fstream << buff;
+        tmp_fstream << "obj,num,time\n";
 
         for (; it != ret.end(); ++it)
         {
-            snprintf(buff, sizeof(buff), "%s,%ld\n", it->first.c_str(), it->second);
+            snprintf(buff, sizeof(buff), "%s,%ld,%s\n", it->first.c_str(), it->second, tmp_buff);
             tmp_fstream << buff;
         }
 
         tmp_fstream.flush();
     }
 protected:
+    mutex_t                     m_mutex;
     list<obj_counter_i*>	m_all_counter;
 };
 
@@ -172,13 +174,13 @@ class obj_counter_t: public obj_counter_i
 public:
     obj_counter_t()
     {
-        singleton_t<obj_counter_summary_t>::instance().reg(this);
+        singleton_t<obj_summary_t>::instance().reg(this);
     }
     virtual const string& get_name() { return TYPE_NAME(T); }
 };
 
-template<typename T>
-class fftype_t: public type_i
+template<typename T, typename R = type_i>
+class fftype_t: public R
 {
 public:
     fftype_t()
