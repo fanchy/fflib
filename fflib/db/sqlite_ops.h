@@ -38,6 +38,10 @@ public:
     void inc_affect_row_num()  { ++ m_affect_rows_num; }
     
     virtual string escape(const string& src_);
+    
+    virtual void begin_transaction();
+    virtual void commit_transaction();
+    virtual void rollback_transaction();
 private:
     void clear_env();
 private:

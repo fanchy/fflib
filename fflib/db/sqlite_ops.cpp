@@ -153,3 +153,18 @@ string sqlite_ops_t::escape(const string& src_)
     ret.erase(ret.begin() + len);
     return ret;
 }
+
+void sqlite_ops_t::begin_transaction()
+{
+    exe_sql("begin transaction", NULL);
+}
+
+void sqlite_ops_t::commit_transaction()
+{
+    exe_sql("commit transaction", NULL);
+}
+
+void sqlite_ops_t::rollback_transaction()
+{
+    exe_sql("rollback transaction", NULL);
+}
