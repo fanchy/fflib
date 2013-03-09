@@ -5,6 +5,7 @@
 #include "base/daemon_tool.h"
 #include "base/arg_helper.h"
 #include "base/strtool.h"
+#include "base/smart_ptr.h"
 
 using namespace ff;
 bool g_run = false;
@@ -113,8 +114,54 @@ int start_db_service(ffrpc_t& ffrpc, db_service_t& service, arg_helper_t* arg_he
     //printf("start_db_service index[%d] end\n", index_);
     return 0;
 }
+
+struct foo_t
+{
+    foo_t()
+    {
+        printf("XXX ... foo...\n");
+    }
+    ~foo_t()
+    {
+        printf("XXX ... ~foo...\n");
+    }
+};
+
+void thread1(shared_ptr_t<foo_t> p)
+{
+    for (int i = 0 ; i < 1000000;)
+    {
+        shared_ptr_t<foo_t> v= p;
+        weak_ptr_t<foo_t> wp1 = v;
+        assert(v);
+        i += 1;
+    }
+}
+int test_ptr()
+{
+    shared_ptr_t<foo_t> sp1(new foo_t);
+    weak_ptr_t<foo_t> wp1;
+    wp1 = sp1;
+    printf("wp1[%p], weak_ref[%ld], ref[%ld]\n", wp1.lock().get(), wp1.ger_ref_count()->m_weak_ref_count.value(),
+                wp1.ger_ref_count()->m_ref_count.value());
+    thread_t thread;
+    thread.create_thread(task_binder_t::gen(&thread1, sp1), 100);
+    
+    do
+    {
+        sleep(1);
+        printf("wp1[%p], weak_ref[%ld], ref[%ld]\n", wp1.lock().get(), wp1.ger_ref_count()->m_weak_ref_count.value(),
+                wp1.ger_ref_count()->m_ref_count.value());
+    }while(wp1.ger_ref_count()->m_weak_ref_count.value() > 2);
+    thread.join();
+    sp1.reset();
+    printf("wp1[%p], weak_ref[%ld], ref[%ld]\n", wp1.lock().get(), wp1.ger_ref_count()->m_weak_ref_count.value(),
+                wp1.ger_ref_count()->m_ref_count.value());
+    return 0;
+}
 int main(int argc, char* argv[])
 {
+    
     if (argc == 1)
     {
         printf("usage: app -broker -client -l tcp://127.0.0.1:10241 -service db_service@1-4,logic_service@1-4\n");

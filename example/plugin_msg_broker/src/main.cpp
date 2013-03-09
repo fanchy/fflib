@@ -9,7 +9,7 @@ using namespace std;
 #include "net/acceptor_impl.h"
 #include "net/epoll_impl.h"
 #include "base/thread.h"
-#include "base/shared_ptr.h"
+#include "base/smart_ptr.h"
 #include "msg_broker_service.h"
 #include "net/net_factory.h"
 
