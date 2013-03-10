@@ -31,16 +31,16 @@ public:
     {
         printf("state_A_t::~state_A_t....\n");
     }
-    virtual void enter(monster_t*)
+    virtual void enter(fsm_t*)
     {
         printf("state_A_t::enter....[%p]\n", this);
     }
-    virtual void update(monster_t* p);
-    virtual void exit(monster_t*)
+    virtual void update(fsm_t* p);
+    virtual void exit(fsm_t*)
     {
         printf("state_A_t::exit....[%p]\n", this);
     }
-    virtual void handle(monster_t*, type_i& event_){}
+    virtual void handle(fsm_t*, type_i& event_){}
 };
 class state_B_t: public ff_state_t<monster_t>
 {
@@ -49,20 +49,20 @@ public:
     {
         printf("state_B_t::~state_B_t....\n");
     }
-    virtual void enter(monster_t*)
+    virtual void enter(fsm_t*)
     {
         printf("state_B_t::enter....[%p]\n", this);
     }
-    virtual void update(monster_t* p)
+    virtual void update(fsm_t* p)
     {
         printf("state_B_t::update....[%p]\n", this);
-        p->ffstate_machine.change(shared_ptr_t<state_A_t>(new state_A_t()));
+        p->change(shared_ptr_t<state_A_t>(new state_A_t()));
     }
-    virtual void exit(monster_t*)
+    virtual void exit(fsm_t*)
     {
         printf("state_B_t::exit....[%p]\n", this);
     }
-    virtual void handle(monster_t*, type_i& event_)
+    virtual void handle(fsm_t*, type_i& event_)
     {
         printf("state_B_t::handle....[%p, event=%s]\n", this, event_.get_type_name().c_str());
         if (event_.cast<event_C_t>())
@@ -71,10 +71,10 @@ public:
         }
     }
 };
-void state_A_t::update(monster_t* p)
+void state_A_t::update(fsm_t* p)
 {
     printf("state_A_t::update....[%p]\n", this);
-    p->ffstate_machine.change(shared_ptr_t<state_B_t>(new state_B_t()));
+    p->change(shared_ptr_t<state_B_t>(new state_B_t()));
 }
 
 int main(int argc, char* argv[])

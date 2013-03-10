@@ -11,15 +11,20 @@ using namespace std;
 namespace ff
 {
 
+template <typename T>
+class ffstate_machine_t;
+
 template<typename T>
 class ff_state_t
 {
 public:
+    typedef ffstate_machine_t<T> fsm_t;
+public:
     virtual ~ff_state_t(){}
-    virtual void enter(T*)  {}
-    virtual void update(T*) {}
-    virtual void exit(T*)   {}
-    virtual void handle(T*, type_i& event_){}
+    virtual void enter(fsm_t*)  {}
+    virtual void update(fsm_t*) {}
+    virtual void exit(fsm_t*)   {}
+    virtual void handle(fsm_t*, type_i& event_){}
 };
 
 template <typename T>
@@ -33,15 +38,15 @@ public:
     {}
 
     virtual ~ffstate_machine_t(){}
-
+    T*   get_owener() { return m_dest_obj; }
     void update()
     {
-        if(m_current_state)   m_current_state->update(m_dest_obj);
+        if(m_current_state)   m_current_state->update(this);
     }
 
     void handle(type_i& event_)
     {
-        if (m_current_state) m_current_state->handle(m_dest_obj, event_);
+        if (m_current_state) m_current_state->handle(this, event_);
     }
 
     void  change(ff_state_ptr_t new_state_)
@@ -49,11 +54,11 @@ public:
         m_previous_state = m_current_state;
         if (m_current_state)
         {
-            m_current_state->exit(m_dest_obj);
+            m_current_state->exit(this);
         }
 
         m_current_state = new_state_;
-        if (m_current_state) m_current_state->enter(m_dest_obj);
+        if (m_current_state) m_current_state->enter(this);
     }
 
     ff_state_ptr_t&  current_state()  {     return m_current_state;    }
