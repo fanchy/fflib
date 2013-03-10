@@ -5,6 +5,7 @@
 #include "base/singleton.h"
 #include "base/lock.h"
 
+#include <stdint.h>
 #include <list>
 #include <fstream>
 #include <string>
@@ -201,5 +202,97 @@ public:
     }
 };
 
+class ffattr_t
+{
+public:
+    typedef uint64_t number_t;
+
+public:
+    virtual ~ffattr_t(){}
+
+    number_t get_num(number_t key_)
+    {
+        map<number_t, number_t>::iterator it = m_num2num.find(key_);
+        if (it != m_num2num.end())
+        {
+            return it->second;
+        }
+        return 0;
+    }
+    const string& get_string(number_t key_)
+    {
+        map<number_t, string>::iterator it = m_num2string.find(key_);
+        if (it != m_num2string.end())
+        {
+            return it->second;
+        }
+        static string dumy_str;
+        return dumy_str;
+    }
+    number_t get_num(const string& key_)
+    {
+        map<string, number_t>::iterator it = m_string2num.find(key_);
+        if (it != m_string2num.end())
+        {
+            return it->second;
+        }
+        return 0;
+    }
+    const string& get_string(const string& key_)
+    {
+        map<string, string>::iterator it = m_string2string.find(key_);
+        if (it != m_string2string.end())
+        {
+            return it->second;
+        }
+        static string dumy_str;
+        return dumy_str;
+    }
+
+    void set_num(number_t key_, number_t val_)
+    {
+        m_num2num[key_] = val_;
+    }
+    void set_string(number_t key_, const string& val_)
+    {
+        m_num2string[key_] = val_;
+    }
+    void set_num(const string& key_, number_t val_)
+    {
+        m_string2num[key_] = val_;
+    }
+    void set_string(const string& key_, const string& val_)
+    {
+        m_string2string[key_] = val_;
+    }
+    
+    bool is_exist_num(number_t key_)
+    {
+        return m_num2num.find(key_) != m_num2num.end();
+    }
+    bool is_exist_string(number_t key_)
+    {
+        return m_num2string.find(key_) != m_num2string.end();
+    }
+    bool is_exist_num(const string& key_)
+    {
+        return m_string2num.find(key_) != m_string2num.end();
+    }
+    bool is_exist_string(const string& key_)
+    {
+        return m_string2string.find(key_) != m_string2string.end();
+    }
+    
+    map<number_t, number_t>& get_num2num()       { return m_num2num;       }
+    map<number_t, string>&   get_num2string()    { return m_num2string;    }
+    map<string, number_t>&   get_string2num()    { return m_string2num;    }
+    map<string, string>&     get_string2string() { return m_string2string; }
+
+private:
+    map<number_t, number_t>    m_num2num;
+    map<number_t, string>      m_num2string;
+    map<string, number_t>      m_string2num;
+    map<string, string>        m_string2string;
+};
 }
 #endif
