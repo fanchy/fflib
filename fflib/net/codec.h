@@ -14,6 +14,7 @@ using namespace std;
 #include "base/atomic_op.h"
 #include "base/lock.h"
 #include "base/fftype.h"
+#include "base/smart_ptr.h"
 
 namespace ff {
 
@@ -32,6 +33,19 @@ struct codec_helper_i
     virtual ~codec_helper_i(){}
     virtual void encode(bin_encoder_t&) const = 0;
     virtual void decode(bin_decoder_t&)       = 0;
+};
+
+template<typename T>
+struct option_t: public shared_ptr_t<T>
+{
+    option_t()
+    {}
+    option_t(const option_t&);
+    void init()
+    {
+        shared_ptr_t<T>::reset();
+        shared_ptr_t<T>::operator=(new T());
+    }
 };
 
 class bin_decoder_t
@@ -95,6 +109,19 @@ public:
     bin_decoder_t& operator >>(codec_helper_i& dest_)
     {
         dest_.decode(*this);
+        return *this;
+    }
+    template<typename T>
+    bin_decoder_t& operator >>(option_t<T>& dest_)
+    {
+        try{
+            dest_.init();
+            *this << *dest_;
+        }
+        catch(exception& e_)
+        {
+            dest_.reset();
+        }
         return *this;
     }
 private:
@@ -180,6 +207,15 @@ public:
     bin_encoder_t& operator <<(const codec_helper_i& dest_)
     {
         dest_.encode(*this);
+        return *this;
+    }
+    template<typename T>
+    bin_encoder_t& operator <<(option_t<T>& dest_)
+    {
+        if (dest_.get())
+        {
+            *this << *(dest_);
+        }
         return *this;
     }
 private:

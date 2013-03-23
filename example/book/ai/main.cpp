@@ -1,5 +1,6 @@
 
 #include "ai/ffai.h"
+#include "net/codec.h"
 using namespace ff;
 
 #include <stdio.h>
@@ -79,6 +80,15 @@ void state_A_t::update(fsm_t* p)
 
 int main(int argc, char* argv[])
 {
+    option_t<int> p;
+    if (!p)
+    {
+        p.init();
+        *p = 100;
+    }
+    if (p)
+        printf("p=%d\n", *p);
+    return 0;
     monster_t monster;
     monster.ffstate_machine.change(shared_ptr_t<state_A_t>(new state_A_t()));
     for (int i = 0; i < 100; ++i)
