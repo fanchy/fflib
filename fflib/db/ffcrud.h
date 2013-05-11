@@ -333,6 +333,19 @@ public:
         }
         return 0;
     }
+	int select_sql(ffdb_t& ffdb, const string& sql_)
+    {
+        vector<vector<string> > ret_data;
+        if (ffdb.exe_sql(sql_, ret_data) || ret_data.size() != 1)
+        {
+            return -1;
+        }
+        for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
+        {
+            CRUD_INFO(T).get_normal_fields()[i]->field_data->set_data(this).set(ret_data[0][i]);
+        }
+        return 0;
+    }
     int update(ffdb_t& ffdb)
     {
         return ffdb.exe_sql(this->update_sql());
