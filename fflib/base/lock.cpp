@@ -106,3 +106,38 @@ bool condition_var_t::broadcast()
 {
     return 0 == pthread_cond_broadcast(&m_cond);
 }
+
+spin_lock_t::spin_lock_t()
+{
+    pthread_spin_init(&spinlock, 0);
+}
+spin_lock_t::~spin_lock_t()
+{
+    pthread_spin_destroy(&spinlock);
+}
+void spin_lock_t::lock()
+{
+    pthread_spin_lock(&spinlock);
+}
+void spin_lock_t::unlock()
+{
+    pthread_spin_unlock(&spinlock);
+}
+bool spin_lock_t::try_lock()
+{
+    if (pthread_spin_trylock(&spinlock))
+    {
+        return false;
+    }
+    return true;
+}
+
+spin_lock_guard_t::spin_lock_guard_t(spin_lock_t& lock_):
+    lock(lock_)
+{
+    lock.lock();
+}
+spin_lock_guard_t::~spin_lock_guard_t()
+{
+    lock.unlock();
+}

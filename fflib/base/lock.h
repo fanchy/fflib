@@ -138,6 +138,28 @@ private:
     rw_mutex_t&      m_mutex;
 };
 
+
+class spin_lock_t
+{
+public:
+    spin_lock_t();
+    ~spin_lock_t();
+    void lock();
+    void unlock();
+    bool try_lock();
+private:
+    pthread_spinlock_t spinlock;
+};
+
+class spin_lock_guard_t
+{
+public:
+    spin_lock_guard_t(spin_lock_t& lock_);
+    ~spin_lock_guard_t();
+
+private:
+    spin_lock_t& lock;
+};
 }
 #endif
 

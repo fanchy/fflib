@@ -13,6 +13,7 @@ struct ref_data_t
 {
     ref_count_t      m_ref_count;
     ref_count_t      m_weak_ref_count;
+    spin_lock_t      m_mutex;
 };
 
 template<typename T>
@@ -216,18 +217,18 @@ public:
         {
             return shared_type_t();
         }
-        if (1 == m_ref_data->m_ref_count.inc_and_fetch(1))
         {
-            //! 数据已经被销毁
-            m_ref_data->m_ref_count.dec_and_check_zero();
-            m_dest_ptr = NULL;
-            return NULL;
+            spin_lock_guard_t lock(m_ref_data->m_mutex);
+            if (1 == m_ref_data->m_ref_count.inc_and_fetch(1))
+            {
+                //! 数据已经被销毁
+                m_ref_data->m_ref_count.dec_and_check_zero();
+                m_dest_ptr = NULL;
+                return NULL;
+            }
         }
-        else
-        {
-            //! 构造新的sharedptr
-            return shared_type_t(m_dest_ptr, m_ref_data);
-        }
+        //! 构造新的sharedptr
+        return shared_type_t(m_dest_ptr, m_ref_data);
     }
     void reset()
     {
