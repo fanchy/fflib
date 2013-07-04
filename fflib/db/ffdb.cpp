@@ -90,3 +90,7 @@ string ffdb_t::escape(const string& src_)
 {
     return m_db_ops->escape(src_);
 }
+int ffdb_t::ping()
+{
+    return m_db_ops->ping();
+}

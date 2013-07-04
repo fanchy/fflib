@@ -42,6 +42,7 @@ public:
     virtual void begin_transaction();
     virtual void commit_transaction();
     virtual void rollback_transaction();
+    virtual int  ping() { return 0; }
 private:
     void clear_env();
 private:

@@ -63,6 +63,8 @@ public:
     int  exe_sql(const string& sql_, db_each_row_callback_i* cb_ = NULL);
     int  exe_sql(const string& sql_, vector<vector<string> >& ret_data_);
     int  exe_sql(const string& sql_, vector<vector<string> >& ret_data_, vector<string>& col_names_);
+    
+    int  ping();
 private:
     db_ops_i*           m_db_ops;
 };
