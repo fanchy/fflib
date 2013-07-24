@@ -352,7 +352,7 @@ int log_service_t::start(const string& opt_)
 
 	arg_helper_t arg(opt_);
 	if (!arg.get_option_value("-log_level").empty()) level = ::atoi(arg.get_option_value("-log_level").c_str());
-	if (!arg.get_option_value("-log_path").empty()) path = arg.get_option_value("-log_level");
+	if (!arg.get_option_value("-log_path").empty()) path = arg.get_option_value("-log_path");
 	if (!arg.get_option_value("-log_filename").empty()) filename = arg.get_option_value("-log_filename");
 
 	if (arg.get_option_value("-log_print_file") == "false" || arg.get_option_value("-log_print_file") == "0")
