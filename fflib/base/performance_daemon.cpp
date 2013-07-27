@@ -146,7 +146,7 @@ void performance_daemon_t::add_perf_data(const string& mod_, long us_)
     {
         pinfo.max = us_;
     }
-    else if (us_ < pinfo.min)
+    if (us_ < pinfo.min)
     {
         pinfo.min = us_;
     }
