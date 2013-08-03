@@ -2,6 +2,7 @@
 #define _SOCKET_I_
 
 #include <string>
+#include <unistd.h>
 using namespace std;
 
 #include "netbase.h"

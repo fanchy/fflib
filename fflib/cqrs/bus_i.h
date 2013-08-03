@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <unistd.h>
 using namespace std;
 
 #include "cqrs/event_i.h"

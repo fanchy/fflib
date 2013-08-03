@@ -34,7 +34,7 @@ OBJS = $(SRCS:%.cpp=%.o)
 all:$(BIN)
 $(BIN):$(OBJS)
 	gcc -c ../../../fflib/db/sqlite3.c -o sqlite3.o
-	g++ -o $(BIN) $(OBJS) $(LDFLAGS)  sqlite3.o
+	g++ -o $(BIN) $(OBJS) sqlite3.o $(LDFLAGS)
 	@echo -e " OK!\tComplie $@ "
 # @$(LN) $(shell pwd)/$(LIB_NAME).$(LIB_VER) /lib/$(LIB_NAME)
 

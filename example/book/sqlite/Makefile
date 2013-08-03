@@ -4,7 +4,7 @@ CP=/bin/cp
 RM=-/bin/rm -rf
 LN=/bin/ln -s 
 CFLAGS=-g  -Wall
-LDFLAGS= -lpthread -llua -ldl
+LDFLAGS= -lpthread -llua -ldl 
 #链接库名
 LIB_NAME=
 #链接库版本
@@ -34,7 +34,7 @@ OBJS = $(SRCS:%.cpp=%.o)
 all:$(BIN)
 $(BIN):$(OBJS)
 	gcc -c ../../../fflib/db/sqlite3.c -o sqlite3.o
-	g++ -o $(BIN) $(OBJS) $(LDFLAGS)  sqlite3.o
+	g++ -o $(BIN) $(OBJS) sqlite3.o  $(LDFLAGS)
 	@echo -e " OK!\tComplie $@ "
 # @$(LN) $(shell pwd)/$(LIB_NAME).$(LIB_VER) /lib/$(LIB_NAME)
 
