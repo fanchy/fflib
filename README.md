@@ -25,9 +25,9 @@ leak check.
    thanks for c++ overloading, it not difficult but just to define nine interface for maximum nice arguments.
  * it can be set whether log contents will be print on console or output to file. even more, this can be modifed when
    runing.
- * it can be set log level, as you know FATAL,ERROR,WARN,INFO,TRACE,DEBUG
+ * it can be set log level, as you know FATAL,ERROR,WARN,INFO,TRACE,DEBUG which can be excute when runing.
  * when it chosen to print on console, it will print with different color for contents of different level.
- * it can be set enable and disable some log class.
+ * it can be set to enable and disable some log class which can be excute when runing.
  
 ## Log Example
 ``` c++
@@ -44,6 +44,28 @@ leak check.
 	LOGFATAL(("TT", "FFFFF"));
 	LOGFATAL(("FF", "DSDFFFFF%s", string("SFWEGGGGGGGGG")));
 	LOG.stop();
+```
+## Task Queue
+ * when we use mutltithread, task queue is always needed. Task Queue is the tie for different. Multithread will 
+   be uncoupled.
+ * Programing Based task queue when use multithread.
+ * it is easy to implement some pattern for multithread.such as one thread one task queue, N threads one task queue,
+   N threads N task queue, N threads M task queue.
+## Task Queue Example
+``` c++
+	thread_t thread;
+	task_queue_t tq;
+	
+	thread.create_thread(task_binder_t::gen(&task_queue_t::run, &tq), 1);
+	
+	foo_t foo;
+	cout << "helloworld, thread id:"<< ::pthread_self() << endl;
+	for (unsigned int j = 0; j < 100; ++j)
+	{
+		tq.produce(task_binder_t::gen(&foo_t::print_callback, &foo, j, &foo_t::check));
+		sleep(1);
+	}
+	thread.join();
 ```
 Starting! See ....
 
