@@ -1,8 +1,27 @@
+
+# FFLib
+
+FFLib is a lightweight c++ framework. I make codes clean as best as I can. KISS is my principle.I usually program 
+with c++. I am a game server developer. So FFlib is mainly designed for game server developing. But some components
+in FFLib is in common use. For example socket&net module, log module, thread&lock, tools for performance & memory 
+leak check.
+
+## Project Goals
+ * Wrap Net operations which use linux epoll (ET), asynchronous & nonblock. no third party lib dependency.
+ * wrap thread & lock & task queue, to make easier to program with multithread. lightweight wrap, even Embed System
+   can use it easyly.
+ * provide some tool for optimize program. performance monitor is to help developer find which part of code is consuming 
+   more time and execute more. Object Count component will record numbers of all type realtime while will not 
+   influence the performance of the program. It will be help to analyze user action and to analyze which part of 
+   program is using most memory.
+ * I will try some code for learn CQRS.
+ * rpc related code integrated here, actually it is copy of FFRPC.
+ * some wrap for db, xml operations.
+
 Starting! See ....
 
 	^_^
 -----------------------
-
 
 FFlib 是轻量级的C++类库，所谓轻量是指代码结构清晰，阅读性强，绝对的精巧极致，当
 从底层到细节都遵循了极简原则时候，类库的性能自然而然达到了很高的水平。FFlib中总
