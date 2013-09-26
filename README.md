@@ -72,7 +72,7 @@ leak check.
 ## Net module
  * It is asynchronous socket lib based ET epoll. You will know ET epoll is a finish state machine for io.
  * It use multithread by task queue component.
- * thount I writes little word here, it is most important component of fflib.
+ * though I writes little word here, it is most important component of fflib.
 ``` c++
     int msg_broker_service_t::handle_broken(socket_ptr_t sock_);
     int msg_broker_service_t::handle_msg(const message_t& msg_, socket_ptr_t sock_);
@@ -93,6 +93,9 @@ leak check.
         cout <<"acceptor open ok, wait to listen\n";
     }
 ```
+
+## Net module
+
 
 Starting! See ....
 
