@@ -1,4 +1,3 @@
-
 # FFLib
 
 FFLib is a lightweight c++ framework. I make codes clean as best as I can. KISS is my principle.I usually program 
@@ -18,6 +17,34 @@ leak check.
  * rpc related code integrated here, actually it is copy of FFRPC.
  * some wrap for db, xml operations.
 
+## Log Module feature
+ * it is a asynchronous log component, when you execute log interface, log content will post to log compoent thread, so
+   main thread is not blcoked. When we develop distributed systen for game server, we expect to response user requeset
+   as soon as possible. That's why we must need a asynchronous log component.
+ * it use prinf style to format log content. As you know， sprintf is not type safe. But I implement it as type safe,
+   thanks for c++ overloading, it not difficult but just to define nine interface for maximum nice arguments.
+ * it can be set whether log contents will be print on console or output to file. even more, this can be modifed when
+   runing.
+ * it can be set log level, as you know FATAL,ERROR,WARN,INFO,TRACE,DEBUG
+ * when it chosen to print on console, it will print with different color for contents of different level.
+ * it can be set enable and disable some log class.
+ 
+## Log Example
+``` c++
+	LOG.start("-log_path ./log -log_filename log -log_class FF,XX -log_print_screen true "
+                  "-log_print_file true -log_level 6");
+	LOGDEBUG(("XX", "FFFFF"));
+	LOGTRACE(("XX", "FFFFF"));
+	LOGINFO(("XX", "FFFFF"));
+	LOGWARN(("XX", "FFFFF"));
+	LOGERROR(("XX", "FFFFF"));
+	LOGFATAL(("XX", "FFFFF"));
+	LOG.mod_class("TT", true);
+
+	LOGFATAL(("TT", "FFFFF"));
+	LOGFATAL(("FF", "DSDFFFFF%s", string("SFWEGGGGGGGGG")));
+	LOG.stop();
+```
 Starting! See ....
 
 	^_^
