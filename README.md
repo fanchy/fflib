@@ -45,12 +45,14 @@ leak check.
 	LOGFATAL(("FF", "DSDFFFFF%s", string("SFWEGGGGGGGGG")));
 	LOG.stop();
 ```
+
 ## Task Queue
  * when we use mutltithread, task queue is always needed. Task Queue is the tie for different. Multithread will 
    be uncoupled.
  * Programing Based task queue when use multithread.
  * it is easy to implement some pattern for multithread.such as one thread one task queue, N threads one task queue,
    N threads N task queue, N threads M task queue.
+
 ## Task Queue Example
 ``` c++
 	thread_t thread;
@@ -67,6 +69,31 @@ leak check.
 	}
 	thread.join();
 ```
+## Net module
+ * It is asynchronous socket lib based ET epoll. You will know ET epoll is a finish state machine for io.
+ * It use multithread by task queue component.
+ * thount I writes little word here, it is most important component of fflib.
+``` c++
+    int msg_broker_service_t::handle_broken(socket_ptr_t sock_);
+    int msg_broker_service_t::handle_msg(const message_t& msg_, socket_ptr_t sock_);
+    msg_broker_service_t broker_service;
+
+    if (broker_service.start(argv[3]))
+    {
+        return -1;
+    }
+
+    if (NULL == net_factory_t::listen(buff, &broker_service))
+    {
+        cout <<"acceptor open failed:" << buff <<"\n";
+        return 1;
+    }
+    else
+    {
+        cout <<"acceptor open ok, wait to listen\n";
+    }
+```
+
 Starting! See ....
 
 	^_^
