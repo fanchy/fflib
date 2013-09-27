@@ -224,7 +224,7 @@ public:
                 //! 数据已经被销毁
                 m_ref_data->m_ref_count.dec_and_check_zero();
                 m_dest_ptr = NULL;
-                return NULL;
+                return shared_type_t();
             }
         }
         //! 构造新的sharedptr
