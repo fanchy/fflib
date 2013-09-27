@@ -94,9 +94,23 @@ leak check.
     }
 ```
 
-## Net module
+## Performance Monitor
+ * It is a tool of collect performance of C++ program in realtime.
+ * Some macro provied. The featur of c++ that stack object will be destructed anyway when code jump out of function,
+   makes it possible to auto compute the end time sub start time of function.
+ * Performance data will be output to file(CSV format) by timer. I also has some tools to analyze data, try FFUI.
+ * thread safe
 
-
+## Performance Monitor Example
+``` c++
+	void foo()
+	{
+		AUTO_PERF();
+	}
+	singleton_t<performance_daemon_t>::instance().start("perf.txt", 5);
+	foo();
+	singleton_t<performance_daemon_t>::instance().stop();
+```
 Starting! See ....
 
 	^_^
