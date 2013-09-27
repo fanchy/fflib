@@ -73,6 +73,7 @@ leak check.
  * It is asynchronous socket lib based ET epoll. You will know ET epoll is a finish state machine for io.
  * It use multithread by task queue component.
  * though I writes little word here, it is most important component of fflib.
+
 ``` c++
     int msg_broker_service_t::handle_broken(socket_ptr_t sock_);
     int msg_broker_service_t::handle_msg(const message_t& msg_, socket_ptr_t sock_);
@@ -100,7 +101,9 @@ leak check.
    makes it possible to auto compute the end time sub start time of function.
  * Performance data will be output to file(CSV format) by timer. I also has some tools to analyze data, try FFUI.
  * thread safe
-
+ * Each cost of Performance is equal to two of gettimeofday.
+ * In my opinion, Performance Monitor should be always setup. There two advantages. first that it is a reference to optimize
+   program, second that it can be found the problem where of program makes progr runing slow when some conditions.
 ## Performance Monitor Example
 ``` c++
 	void foo()
