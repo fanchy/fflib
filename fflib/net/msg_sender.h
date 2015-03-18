@@ -53,7 +53,7 @@ public:
             h.size = body.size();
             string dest((const char*)&h, sizeof(h));
             dest += body;
-            socket_ptr_->async_send(body);
+            socket_ptr_->async_send(dest);
         }
     }
 };
