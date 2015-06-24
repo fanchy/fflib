@@ -141,29 +141,37 @@ public:
 
     void dump(const string& path_)
     {
-        ofstream tmp_fstream;
-        tmp_fstream.open(path_.c_str(), ios::app);
+        FILE* fp = ::fopen(path_.c_str(), "a+");
+        if (NULL == fp)
+        {
+            return;
+        }
+    
+        char tmp_buff[256] = {0};
+        if(getc(fp) == EOF)
+        {           
+            int n = snprintf(tmp_buff, sizeof(tmp_buff), "time,obj,num\n");
+            fwrite(tmp_buff, n, 1, fp);
+        }
+
         map<string, long> ret = get_all_obj_num();
         map<string, long>::iterator it = ret.begin();
 
         time_t timep   = time(NULL);
         struct tm *tmp = localtime(&timep);
-
-        char tmp_buff[256];
+        
         sprintf(tmp_buff, "%04d%02d%02d-%02d:%02d:%02d",
                         tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
                         tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
         char buff[1024] = {0};
 
-        tmp_fstream << "obj,num,time\n";
-
         for (; it != ret.end(); ++it)
         {
-            snprintf(buff, sizeof(buff), "%s,%ld,%s\n", it->first.c_str(), it->second, tmp_buff);
-            tmp_fstream << buff;
+            int n = snprintf(buff, sizeof(buff), "%s,%s,%ld\n", tmp_buff, it->first.c_str(), it->second);
+            fwrite(buff, n, 1, fp);
         }
 
-        tmp_fstream.flush();
+        fclose(fp);
     }
 protected:
     mutex_t                     m_mutex;

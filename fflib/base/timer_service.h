@@ -55,7 +55,7 @@ class timer_service_t
     typedef list<registered_info_t>             registered_info_list_t;
     typedef multimap<long, registered_info_t>   registered_info_map_t;
 public:
-    timer_service_t(long tick = 1):
+    timer_service_t(long tick = 1000):
         m_runing(true),
         m_efd(-1),
         m_min_timeout(tick),

@@ -551,7 +551,7 @@ int broker_service_t::service_obj_t::interface_callback(msg_i& msg_, const strin
 
         long cost = now.tv_sec*1000000 + now.tv_usec - it->second.start_time;
 
-        singleton_t<performance_daemon_t>::instance().post(it->second.req_msg, cost);
+        singleton_t<performance_daemon_t>::instance().post(it->second.req_msg, 0, cost);
         m_callback_map.erase(it);
         return 0;
     }

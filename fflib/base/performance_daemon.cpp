@@ -1,5 +1,8 @@
 #include "base/performance_daemon.h"
-
+#include "base/fftype.h"
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 using namespace ff;
 
 performance_daemon_t::performance_daemon_t():
@@ -19,6 +22,18 @@ int performance_daemon_t::start(const string& path_, int seconds_)
 {
     if (true == m_started) return -1;
     
+    m_path = path_;
+    int rc = ::access(m_path.c_str(), F_OK);
+    if (0 != rc)
+    {
+        rc = ::mkdir(m_path.c_str(), 0777);
+        if (rc != 0)
+        {
+            printf("performance_daemon_t::start mkdir<%s>failed error<%s>\n", m_path.c_str(), ::strerror(errno));
+            return -1;
+        }
+    }
+    
     m_timeout_sec = seconds_;
     
     //! 启动定时器 1 times/seconds
@@ -33,8 +48,7 @@ int performance_daemon_t::start(const string& path_, int seconds_)
             ((performance_daemon_t*)p_)->run();
         }
     };
-    
-    m_fstream.open(path_.c_str());
+
     m_thread.create_thread(task_t(&lambda_t::run, this), 1);
     return 0;
 }
@@ -53,35 +67,14 @@ int performance_daemon_t::stop()
     
     m_task_queue.close();
     m_thread.join();
-    m_fstream.close();
     return 0;
 }
 
-void performance_daemon_t::post(const string& mod_, long us_)
+void performance_daemon_t::post(const string& mod_, long arg_, long us_)
 {
-    struct lambda_perf_data_t
-    {
-        static void add_perf_data(void* p_)
-        {
-            lambda_perf_data_t* pd_ptr = (lambda_perf_data_t*)p_;
-            pd_ptr->pd->add_perf_data(pd_ptr->mod, pd_ptr->cost);
-            
-            delete pd_ptr;
-        }
-        lambda_perf_data_t(performance_daemon_t* p_, const string& mod_, long cost_):
-        pd(p_),
-        mod(mod_),
-        cost(cost_)
-        {
-        }
-        performance_daemon_t* pd;
-        string                mod;
-        long                  cost;
-    };
-    
     if (m_started)
     {
-        m_task_queue.produce(task_t(&lambda_perf_data_t::add_perf_data, new lambda_perf_data_t(this, mod_, us_)));
+        m_task_queue.produce(task_binder_t::gen(&performance_daemon_t::add_perf_data, this, mod_, arg_, us_));
     }
     else
     {
@@ -92,7 +85,7 @@ void performance_daemon_t::post(const string& mod_, long us_)
 void performance_daemon_t::handle_timer()
 {
     flush();
-    m_perf_info.clear();
+    //m_perf_info.clear();
     m_timer_service->timer_callback(m_timeout_sec * 1000, task_t(&timer_lambda_t::setup_timer, this));
 }
 
@@ -103,28 +96,47 @@ void performance_daemon_t::flush()
     time_t timep   = time(NULL);
     struct tm *tmp = localtime(&timep);
     
-    char tmp_buff[256];
+    char tmp_buff[256] = {0};
+    char buff[1024]    = {0};
+    
+    sprintf(tmp_buff, "/%04d-%02d-%02d.perf",
+            tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday);
+    string filename = m_path + tmp_buff;
+    
+    FILE* fp = ::fopen(filename.c_str(), "a+");
+    if (NULL == fp)
+    {
+        return;
+    }
+
+    if(getc(fp) == EOF)
+    {           
+        int n = snprintf(buff, sizeof(buff), "time,mod,rps,exe_times,max_cost[us],min_cost[us],per_cost[us]\n");
+        fwrite(buff, n, 1, fp);
+    }
+
     sprintf(tmp_buff, "%04d%02d%02d-%02d:%02d:%02d",
             tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
             tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
-    char buff[1024] = {0};
-    
-    snprintf(buff, sizeof(buff), "time,mod,max_cost[us],min_cost[us],per_cost[us],request_per_second,exe_times\n");
-    m_fstream << buff;
-    
     for (; it != m_perf_info.end(); ++it)
     {
         perf_info_t& pinfo = it->second;
-        long per = pinfo.total / pinfo.times;
-        long rps = (per == 0? -1: 1000000 / per);
+        long per = (pinfo.times == 0? 0: (pinfo.total / pinfo.times));
+        long rps = (per == 0? 0: 1000000 / per);
         
         //! -------------------------- time, mod, max, min, per, rps, times
-        snprintf(buff, sizeof(buff), "%s,%s,%ld,%ld,%ld,%ld,%ld\n",
-                 tmp_buff, it->first.c_str(), pinfo.max, pinfo.min, per, rps, pinfo.times);
-        m_fstream << buff;
+        int n = snprintf(buff, sizeof(buff), "%s,%s,%ld,%ld,%ld,%ld,%ld\n",
+                 tmp_buff, it->first.c_str(), rps, pinfo.times, pinfo.max, per == 0? 0: pinfo.min, per);
+        fwrite(buff, n, 1, fp);
+        pinfo.clear();
     }
+    fclose(fp);
     
-    m_fstream.flush();
+    
+    sprintf(tmp_buff, "/%04d-%02d-%02d.counter",
+            tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday);
+    string filecounter = m_path + tmp_buff;
+    singleton_t<obj_sum_mgr_t>::instance().dump(filecounter);
 }
 
 
@@ -135,19 +147,29 @@ void performance_daemon_t::run()
     m_task_queue.run();
 }
 
-void performance_daemon_t::add_perf_data(const string& mod_, long us_)
+void performance_daemon_t::add_perf_data(const string& mod_, long arg_, long us_)
 {
-    perf_info_t& pinfo = m_perf_info[mod_];
-    
-    pinfo.total += us_;
-    pinfo.times += 1;
-    
-    if (us_ > pinfo.max)
+    perf_info_t* pinfo = NULL;
+    if (arg_ >= 0)
     {
-        pinfo.max = us_;
+        char msg[32];
+        snprintf(msg, sizeof(msg), "%s[%ld]", mod_.c_str(), arg_);
+        pinfo = &(m_perf_info[msg]);
     }
-    if (us_ < pinfo.min)
+    else
     {
-        pinfo.min = us_;
+        pinfo = &(m_perf_info[mod_]);
+    }
+    
+    pinfo->total += us_;
+    pinfo->times += 1;
+    
+    if (us_ > pinfo->max)
+    {
+        pinfo->max = us_;
+    }
+    if (us_ < pinfo->min)
+    {
+        pinfo->min = us_;
     }
 }

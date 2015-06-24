@@ -81,15 +81,29 @@ public:
     
 };
 
-int main(int argc, char* argv[])
+void test(int n = 100)
 {
-    for (int i = 0; i < 100; ++i)
+    AUTO_PERF();
+    for (int i = 0; i < n; ++i)
     {
         foo_t* p = new foo_t();
         foo2_t* p2 = new foo2_t();
         dumy_t* p3 = new dumy_t();
     }
-    singleton_t<obj_sum_mgr_t>::instance().dump("./dump.txt");
+}
+int main(int argc, char* argv[])
+{
+    singleton_t<performance_daemon_t>::instance().start("perf", 5);
+    
+    test();
+    
+    for (int j = 0; j < 10; ++j)
+    {
+        sleep(2);
+        test(500);
+    }
+    sleep(600);
+    singleton_t<performance_daemon_t>::instance().stop();
     return 0;
     task_t t1(&xx, NULL);
     task_t t2 = t1;
@@ -105,7 +119,7 @@ int main(int argc, char* argv[])
     tmp.del(NULL);
     tmp.timer_check();*/
     
-    //singleton_t<performance_daemon_t>::instance().start("perf.txt", 5); 
+    // 
 
     timer_service_t ts(1);
     ts.timer_callback(2000, task_t(&xx, (void*)2));
@@ -123,7 +137,7 @@ int main(int argc, char* argv[])
         usleep(1000*100);
     }
 */
-    sleep(600);
+    
 
     //singleton_t<performance_daemon_t>::instance().stop();  
     return 0;
