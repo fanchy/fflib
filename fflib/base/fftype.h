@@ -104,24 +104,25 @@ public:
     }
 };
 
-class obj_counter_i
+class obj_counter_sum_i
 {
 public:
-    obj_counter_i():m_ref_count(0){}
-    virtual ~ obj_counter_i(){}
-    void inc(int n) { (void)__sync_add_and_fetch(&m_ref_count, n); }
-    void dec(int n) { __sync_sub_and_fetch(&m_ref_count, n); 	   }
+    obj_counter_sum_i():m_ref_count(0){}
+    virtual ~ obj_counter_sum_i(){}
+    void inc(int n = 1) { (void)__sync_add_and_fetch(&m_ref_count, n); }
+    void dec(int n = 1) { __sync_sub_and_fetch(&m_ref_count, n); 	   }
     long val() const{ return m_ref_count; 						   }
 
-    virtual const string& get_name() { static string ret; return ret; }
+    virtual const string& name() = 0;
 protected:
     volatile long m_ref_count;
 };
 
-class obj_summary_t
+
+class obj_sum_mgr_t
 {
 public:
-    void reg(obj_counter_i* p)
+    void reg(obj_counter_sum_i* p)
     {
         lock_guard_t lock(m_mutex);
         m_all_counter.push_back(p);
@@ -131,9 +132,9 @@ public:
     {
         lock_guard_t lock(m_mutex);
         map<string, long> ret;
-        for (list<obj_counter_i*>::iterator it = m_all_counter.begin(); it != m_all_counter.end(); ++it)
+        for (list<obj_counter_sum_i*>::iterator it = m_all_counter.begin(); it != m_all_counter.end(); ++it)
         {
-            ret.insert(make_pair((*it)->get_name(), (*it)->val()));
+            ret.insert(make_pair((*it)->name(), (*it)->val()));
         }
         return ret;
     }
@@ -166,42 +167,36 @@ public:
     }
 protected:
     mutex_t                     m_mutex;
-    list<obj_counter_i*>	m_all_counter;
+    list<obj_counter_sum_i*>	m_all_counter;
 };
 
 template<typename T>
-class obj_counter_t: public obj_counter_i
+class obj_counter_sum_t: public obj_counter_sum_i
+{
+public:
+    obj_counter_sum_t()
+    {
+        m_name = TYPE_NAME(T);
+        singleton_t<obj_sum_mgr_t>::instance().reg(this);
+    }
+    virtual const string& name() { return m_name; }
+protected:
+    string m_name;
+};
+
+template<typename T>
+class obj_counter_t
 {
 public:
     obj_counter_t()
     {
-        singleton_t<obj_summary_t>::instance().reg(this);
+        singleton_t<obj_counter_sum_t<T> >::instance().inc(1);
     }
-    virtual const string& get_name() { return TYPE_NAME(T); }
-};
-
-template<typename T, typename R = type_i>
-class fftype_t: public R
-{
-public:
-    fftype_t()
+    ~obj_counter_t()
     {
-        singleton_t<obj_counter_t<T> >::instance().inc(1);
-    }
-    virtual ~ fftype_t()
-    {
-        singleton_t<obj_counter_t<T> >::instance().dec(1);
-    }
-    virtual int get_type_id() const
-    {
-        return TYPEID(T);
-    }
-    virtual const string& get_type_name() const
-    {
-        return TYPE_NAME(T);
+        singleton_t<obj_counter_sum_t<T> >::instance().dec(1);
     }
 };
-
 class ffattr_t
 {
 public:
