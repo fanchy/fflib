@@ -5,7 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
-using namespace std;
+
 #include <string.h>
 #include <stdio.h>
 #include "base/singleton.h"
@@ -19,8 +19,8 @@ class db_field_info_i
 {
 public:
     virtual ~db_field_info_i(){}
-    virtual string  get() = 0;
-    virtual int     set(const string& val_) = 0;
+    virtual std::string  get() = 0;
+    virtual int     set(const std::string& val_) = 0;
 
     db_field_info_i&  set_data(void* p_) { m_obj_ptr = p_; return *this;}
     template<typename T>
@@ -38,15 +38,15 @@ public:
         m_field_ptr(p_)
     {
     }
-    virtual string  get()
+    virtual std::string  get()
     {
         stringstream ss;
-        string ret;
+        std::string ret;
         ss << (get_data<CLASS_TYPE>()->*m_field_ptr);
         ss >> ret;
         return ret;
     }
-    virtual int     set(const string& val_)
+    virtual int     set(const std::string& val_)
     {
         stringstream ss;
         ss << val_;
@@ -72,15 +72,15 @@ public:
         m_field_ptr(p_)
     {
     }
-    virtual string  get()
+    virtual std::string  get()
     {
         stringstream ss;
-        string ret;
+        std::string ret;
         ss << (get_data<CLASS_TYPE>()->*m_field_ptr)();
         ss >> ret;
         return ret;
     }
-    virtual int     set(const string& val_)
+    virtual int     set(const std::string& val_)
     {
         stringstream ss;
         ss << val_;
@@ -131,10 +131,10 @@ public:
                 field_data = NULL;
             }
         }
-        string field_name;
+        std::string field_name;
         db_field_info_i* field_data;
     };
-    typedef vector<field_reg_info_t*> field_reg_info_vt_t;
+    typedef std::vector<field_reg_info_t*> field_reg_info_vt_t;
     typedef typename field_reg_info_vt_t::iterator field_reg_info_it_t;
 
 public:
@@ -148,14 +148,14 @@ public:
         m_normal_fields.clear();
         m_index_for_field.clear();
     }
-    static ffcrud_register_t& bind_table(const string& table_name_, const string& primarykeys_)
+    static ffcrud_register_t& bind_table(const std::string& table_name_, const std::string& primarykeys_)
     {
         return singleton_t<ffcrud_register_t<T> >::instance().bind_table_and_primarykey(table_name_, primarykeys_);
     }
-    ffcrud_register_t& bind_table_and_primarykey(const string& table_name_, const string& primarykeys_)
+    ffcrud_register_t& bind_table_and_primarykey(const std::string& table_name_, const std::string& primarykeys_)
     {
         m_table_name = table_name_;
-        vector<string> str_vt;
+        std::vector<std::string> str_vt;
         strtool_t::split(primarykeys_, str_vt, ",");
         for (size_t i = 0; i < str_vt.size(); ++i)
         {
@@ -166,7 +166,7 @@ public:
     }
     
     template<typename RET>
-    ffcrud_register_t& def(RET T::* p_, const string& field_name_)
+    ffcrud_register_t& def(RET T::* p_, const std::string& field_name_)
     {
         field_reg_info_it_t it = this->find(m_primarykey_fields, field_name_);
         if (it != m_primarykey_fields.end())
@@ -181,7 +181,7 @@ public:
         return *this;
     }
     template<typename RET>
-    ffcrud_register_t& def(RET (T::*p_)(), const string& field_name_)
+    ffcrud_register_t& def(RET (T::*p_)(), const std::string& field_name_)
     {
         field_reg_info_it_t it = this->find(m_primarykey_fields, field_name_);
         if (it != m_primarykey_fields.end())
@@ -196,7 +196,7 @@ public:
         
         return *this;
     }
-    field_reg_info_it_t find(field_reg_info_vt_t& vt_, const string& name_)
+    field_reg_info_it_t find(field_reg_info_vt_t& vt_, const std::string& name_)
     {
         field_reg_info_it_t it = vt_.begin();
         for (; it != vt_.end(); ++it)
@@ -209,7 +209,7 @@ public:
         return it;
     }
     
-    const string& get_table_name()                     { return m_table_name; }
+    const std::string& get_table_name()                     { return m_table_name; }
     const field_reg_info_vt_t& get_primarykey_fields() { return m_primarykey_fields; }
     const field_reg_info_vt_t& get_normal_fields()     { return m_normal_fields; }
     
@@ -224,7 +224,7 @@ public:
     }
     
 private:
-    string                              m_table_name;
+    std::string                              m_table_name;
     field_reg_info_vt_t                 m_primarykey_fields;
     field_reg_info_vt_t                 m_normal_fields;
     map<long, field_reg_info_t*>        m_index_for_field;
@@ -237,11 +237,11 @@ class ffcrud_t
 {
 public:
     virtual ~ffcrud_t(){}
-    string insert_sql()
+    std::string insert_sql()
     {
-        string sql = "INSERT INTO ";
+        std::string sql = "INSERT INTO ";
         sql += CRUD_INFO(T).get_table_name() + " (";
-        string val = " (";
+        std::string val = " (";
 
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
@@ -260,9 +260,9 @@ public:
         sql += "VALUES" + val;
         return sql;
     }
-    string select_sql()
+    std::string select_sql()
     {
-        string sql = "SELECT ";
+        std::string sql = "SELECT ";
         
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
         {
@@ -280,9 +280,9 @@ public:
         sql += " limit 1;";
         return sql;
     }
-    string update_sql()
+    std::string update_sql()
     {
-        string sql = "UPDATE ";
+        std::string sql = "UPDATE ";
         sql += CRUD_INFO(T).get_table_name() + " SET ";
         
         for (size_t i = 0; i < CRUD_INFO(T).get_normal_fields().size(); ++i)
@@ -300,9 +300,9 @@ public:
         }
         return sql;
     }
-    string del_sql()
+    std::string del_sql()
     {
-        string sql = "DELETE FROM ";
+        std::string sql = "DELETE FROM ";
         sql += CRUD_INFO(T).get_table_name();
         
         sql += " WHERE ";
@@ -322,7 +322,7 @@ public:
     }
     int select(ffdb_t& ffdb)
     {
-        vector<vector<string> > ret_data;
+        std::vector<std::vector<std::string> > ret_data;
         if (ffdb.exe_sql(this->select_sql(), ret_data) || ret_data.size() != 1)
         {
             return -1;
@@ -333,9 +333,9 @@ public:
         }
         return 0;
     }
-	int select_sql(ffdb_t& ffdb, const string& sql_)
+	int select_sql(ffdb_t& ffdb, const std::string& sql_)
     {
-        vector<vector<string> > ret_data;
+        std::vector<std::vector<std::string> > ret_data;
         if (ffdb.exe_sql(sql_, ret_data) || ret_data.size() != 1)
         {
             return -1;
@@ -356,9 +356,9 @@ public:
     }
     
     /************** 高级接口  *************************/
-    string update_sql(vector<db_field_info_i*> vt_)
+    std::string update_sql(std::vector<db_field_info_i*> vt_)
     {
-        string sql = "UPDATE ";
+        std::string sql = "UPDATE ";
         sql += CRUD_INFO(T).get_table_name() + " SET ";
         
         for (size_t i = 0; i < vt_.size(); ++i)
@@ -382,9 +382,9 @@ public:
         }
         return sql;
     }
-    string select_sql(vector<db_field_info_i*> vt_)
+    std::string select_sql(std::vector<db_field_info_i*> vt_)
     {
-        string sql = "SELECT ";
+        std::string sql = "SELECT ";
         size_t n = 0;
         for (size_t i = 0; i < CRUD_INFO(T).get_primarykey_fields().size(); ++i)
         {
@@ -411,7 +411,7 @@ public:
         }
         return sql;
     }
-    void destory(vector<db_field_info_i*>& args_)
+    void destory(std::vector<db_field_info_i*>& args_)
     {
         for (size_t i =0 ;i < args_.size(); ++i)
         {
@@ -422,9 +422,9 @@ public:
     template <typename ARG1>
     int update(ffdb_t& ffdb, ARG1 arg1)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -435,10 +435,10 @@ public:
     template <typename ARG1, typename ARG2>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -449,11 +449,11 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -464,12 +464,12 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
         args.push_back(db_field_impl_factory_t::alloc(arg4));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -480,13 +480,13 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4, ARG5 arg5)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
         args.push_back(db_field_impl_factory_t::alloc(arg4));
         args.push_back(db_field_impl_factory_t::alloc(arg5));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -497,14 +497,14 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4, ARG5 arg5, ARG6 arg6)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
         args.push_back(db_field_impl_factory_t::alloc(arg4));
         args.push_back(db_field_impl_factory_t::alloc(arg5));
         args.push_back(db_field_impl_factory_t::alloc(arg6));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -515,7 +515,7 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4, ARG5 arg5, ARG6 arg6, ARG7 arg7)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
@@ -523,7 +523,7 @@ public:
         args.push_back(db_field_impl_factory_t::alloc(arg5));
         args.push_back(db_field_impl_factory_t::alloc(arg6));
         args.push_back(db_field_impl_factory_t::alloc(arg7));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -534,7 +534,7 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4, ARG5 arg5, ARG6 arg6, ARG7 arg7, ARG8 arg8)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
@@ -543,7 +543,7 @@ public:
         args.push_back(db_field_impl_factory_t::alloc(arg6));
         args.push_back(db_field_impl_factory_t::alloc(arg7));
         args.push_back(db_field_impl_factory_t::alloc(arg8));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -554,7 +554,7 @@ public:
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4, typename ARG5, typename ARG6, typename ARG7, typename ARG8, typename ARG9>
     int update(ffdb_t& ffdb, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4, ARG5 arg5, ARG6 arg6, ARG7 arg7, ARG8 arg8, ARG9 arg9)
     {
-        vector<db_field_info_i*> args;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
@@ -564,7 +564,7 @@ public:
         args.push_back(db_field_impl_factory_t::alloc(arg7));
         args.push_back(db_field_impl_factory_t::alloc(arg8));
         args.push_back(db_field_impl_factory_t::alloc(arg9));
-        string sql = update_sql(args);
+        std::string sql = update_sql(args);
         destory(args);
         if (false == sql.empty())
         {
@@ -574,10 +574,10 @@ public:
     }
     
     template <typename ARG1>
-    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1)
+    int select_all(ffdb_t& ffdb, std::vector<T>& ret_, ARG1 arg1)
     {
-        vector<vector<string> > ret_data;
-        vector<db_field_info_i*> args;
+        std::vector<std::vector<std::string> > ret_data;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
 
         if (ffdb.exe_sql(this->select_sql(args), ret_data))
@@ -599,10 +599,10 @@ public:
         return 0;
     }
     template <typename ARG1, typename ARG2>
-    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2)
+    int select_all(ffdb_t& ffdb, std::vector<T>& ret_, ARG1 arg1, ARG2 arg2)
     {
-        vector<vector<string> > ret_data;
-        vector<db_field_info_i*> args;
+        std::vector<std::vector<std::string> > ret_data;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
 
@@ -627,10 +627,10 @@ public:
         return 0;
     }
     template <typename ARG1, typename ARG2, typename ARG3>
-    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3)
+    int select_all(ffdb_t& ffdb, std::vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3)
     {
-        vector<vector<string> > ret_data;
-        vector<db_field_info_i*> args;
+        std::vector<std::vector<std::string> > ret_data;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));
@@ -654,10 +654,10 @@ public:
         return 0;
     }
     template <typename ARG1, typename ARG2, typename ARG3, typename ARG4>
-    int select_all(ffdb_t& ffdb, vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4)
+    int select_all(ffdb_t& ffdb, std::vector<T>& ret_, ARG1 arg1, ARG2 arg2, ARG3 arg3, ARG4 arg4)
     {
-        vector<vector<string> > ret_data;
-        vector<db_field_info_i*> args;
+        std::vector<std::vector<std::string> > ret_data;
+        std::vector<db_field_info_i*> args;
         args.push_back(db_field_impl_factory_t::alloc(arg1));
         args.push_back(db_field_impl_factory_t::alloc(arg2));
         args.push_back(db_field_impl_factory_t::alloc(arg3));

@@ -6,7 +6,7 @@
 #include "db/sqlite3.h"
 
 #include <vector>
-using namespace std;
+
 
 namespace ff
 {
@@ -22,22 +22,21 @@ public:
         {}
         sqlite_ops_t* obj;
         db_each_row_callback_i* callback;
-        vector<long>            length_buff;
+        std::vector<long>            length_buff;
     };
 public:
     sqlite_ops_t();
     virtual ~sqlite_ops_t();
 
-    virtual int  connect(const string& args_);
+    virtual int  connect(const std::string& args_);
     virtual bool is_connected();
-    virtual int  exe_sql(const string& sql_, db_each_row_callback_i* cb_);
+    virtual int  exe_sql(const std::string& sql_, db_each_row_callback_i* cb_);
     virtual void close();
-    virtual int  affect_rows() { return m_affect_rows_num; }
+    virtual int  affected_rows() { return m_affected_rows_num; }
     virtual const char*  error_msg();
 
-    void inc_affect_row_num()  { ++ m_affect_rows_num; }
-    
-    virtual string escape(const string& src_);
+    void inc_affect_row_num()  { ++ m_affected_rows_num; }
+
     
     virtual void begin_transaction();
     virtual void commit_transaction();
@@ -48,8 +47,8 @@ private:
 private:
     sqlite3* m_sqlite;
     bool     m_connected;
-    string   m_error;
-    int      m_affect_rows_num;
+    std::string   m_error;
+    int      m_affected_rows_num;
     callback_info_t m_callback_info;
 };
 }
