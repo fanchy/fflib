@@ -138,7 +138,7 @@ log_t::log_t(int level_, const string& all_class_, const string& path_, const st
 	m_file_name_index(0),
 	m_line_num(0)
 {
-	::memset(&m_last_create_dir_tm, sizeof(m_last_create_dir_tm), 0);
+	::memset(&m_last_create_dir_tm, 0, sizeof(m_last_create_dir_tm));
 	m_class_set_history.push_back(m_enable_class_set);
 
 	for (int i = 0; i <= level_; ++i)
